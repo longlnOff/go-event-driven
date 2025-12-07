@@ -1,4 +1,4 @@
-exercise_id = "9c0baeb5-1376-42a5-9f46-b5953d82056f"
-directory = "03-message-broker/01-choosing-the-message-broker"
-is_text_only = true
+exercise_id = "11b26cc6-6229-47df-b2b0-9d591ca4ca79"
+directory = "project"
+is_text_only = false
 is_optional = false
