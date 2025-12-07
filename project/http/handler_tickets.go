@@ -3,8 +3,8 @@ package http
 import (
 	"net/http"
 	"github.com/labstack/echo/v4"
-
-	ticketsWorker "tickets/worker"
+	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ThreeDotsLabs/watermill"
 )
 
 type ticketsConfirmationRequest struct {
@@ -19,16 +19,21 @@ func (h Handler) PostTicketsConfirmation(c echo.Context) error {
 	}
 
 	for _, ticket := range request.Tickets {
-		h.worker.Send(
-			ticketsWorker.Message{
-				Task: ticketsWorker.TaskIssueReceipt,
-				TicketID: ticket,
-			},
-			ticketsWorker.Message{
-				Task: ticketsWorker.TaskAppendToTracker,
-				TicketID: ticket,
-			},
+		err := h.publisher.Publish(
+			"issue-receipt",
+			message.NewMessage(watermill.NewUUID(), []byte(ticket)),
 		)
+		if err != nil {
+			return err
+		}
+
+		err = h.publisher.Publish(
+			"append-to-tracker",
+			message.NewMessage(watermill.NewUUID(), []byte(ticket)),
+		)
+		if err != nil {
+			return err
+		}
 	}
 
 	return c.NoContent(http.StatusOK)

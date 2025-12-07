@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"errors"
-	stdHTTP "net/http"
+	"net/http"
 
+	"github.com/ThreeDotsLabs/watermill"
 	"github.com/labstack/echo/v4"
+	"github.com/redis/go-redis/v9"
 
-	ticketsWorker "tickets/worker"
 	ticketsHttp "tickets/http"
+	ticketsMessage "tickets/message"
 )
 
 type Service struct {
@@ -16,19 +18,23 @@ type Service struct {
 }
 
 func New(
-	spreadsheetsAPI ticketsWorker.SpreadsheetsAPI,
-	receiptsService ticketsWorker.ReceiptsService,
+	spreadsheetsAPI ticketsMessage.SpreadsheetsAPI,
+	receiptsService ticketsMessage.ReceiptsService,
+	rdb redis.UniversalClient,
 ) Service {
-	ctx := context.Background()
-	worker := ticketsWorker.NewWorker(
+
+	watermillLogger := watermill.NewSlogLogger(nil)
+	publisher := ticketsMessage.NewRedisPublisher(rdb, watermillLogger)
+
+	ticketsMessage.NewHandler(
 		spreadsheetsAPI,
 		receiptsService,
+		rdb,
+		watermillLogger,
 	)
 
-	go worker.Run(ctx)
-
 	echoRouter := ticketsHttp.NewHttpRouter(
-		worker,
+		publisher,
 	)
 	
 	return Service{
@@ -38,7 +44,7 @@ func New(
 
 func (s Service) Run(ctx context.Context) error {
 	err := s.echoRouter.Start(":8080")
-	if err != nil && !errors.Is(err, stdHTTP.ErrServerClosed) {
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 

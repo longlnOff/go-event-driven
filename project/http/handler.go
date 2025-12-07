@@ -1,9 +1,9 @@
 package http
 
 import (
-	ticketsWorker "tickets/worker"
+	"github.com/ThreeDotsLabs/watermill/message"
 )
 
 type Handler struct {
-	worker *ticketsWorker.Worker
+	publisher message.Publisher
 }
