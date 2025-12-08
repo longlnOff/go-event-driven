@@ -3,8 +3,10 @@ package message
 import (
 	"context"
 	"log/slog"
+
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -18,12 +20,13 @@ type ReceiptsService interface {
 	IssueReceipt(ctx context.Context, ticketID string) error
 }
 
-func NewHandler(
+func NewRouter(
 	spreadsheetsAPI SpreadsheetsAPI,
 	receiptsService ReceiptsService,
 	rdb redis.UniversalClient,
 	watermillLogger watermill.LoggerAdapter,
-) {
+) *message.Router {
+	router := message.NewDefaultRouter(watermillLogger)
 	issueReceiptSub, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{
 		Client:        rdb,
 		ConsumerGroup: "issue-receipt",
@@ -40,41 +43,37 @@ func NewHandler(
 		panic(err)
 	}
 
-	go func() {
-		messages, err := issueReceiptSub.Subscribe(context.Background(), "issue-receipt")
-		if err != nil {
-			panic(err)
-		}
-
-		for msg := range messages {
+	router.AddConsumerHandler(
+		"issue-receipt-handler",
+		"issue-receipt",
+		issueReceiptSub,
+		func (msg *message.Message) error {
 			err := receiptsService.IssueReceipt(msg.Context(), string(msg.Payload))
 			if err != nil {
 				slog.With("error", err).Error("Error issuing receipt")
-				msg.Nack()
-			} else {
-				msg.Ack()
+				return err
 			}
-		}
-	}()
+			return nil
+		},
+	)
 
-	go func() {
-		messages, err := appendToTrackerSub.Subscribe(context.Background(), "append-to-tracker")
-		if err != nil {
-			panic(err)
-		}
-
-		for msg := range messages {
+	router.AddConsumerHandler(
+		"append-to-tracker-handler",
+		"append-to-tracker",
+		appendToTrackerSub,
+		func (msg *message.Message) error {
 			err := spreadsheetsAPI.AppendRow(
 				msg.Context(),
 				"tickets-to-print",
 				[]string{string(msg.Payload)},
-			)
+			)			
 			if err != nil {
 				slog.With("error", err).Error("Error appending to tracker")
-				msg.Nack()
-			} else {
-				msg.Ack()
+				return err
 			}
-		}
-	}()
+			return nil
+		},
+	)
+
+	return router
 }

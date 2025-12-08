@@ -4,13 +4,14 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"os/signal"
+
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 
-
 	ticketsAdapter "tickets/adapters"
-	ticketsService "tickets/service"
 	ticketsMessage "tickets/message"
+	ticketsService "tickets/service"
 )
 
 func main() {
@@ -20,6 +21,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 
 	spreadsheetsAPI := ticketsAdapter.NewSpreadsheetsAPIClient(apiClients)
 	receiptsService := ticketsAdapter.NewReceiptsServiceClient(apiClients)
@@ -31,7 +35,7 @@ func main() {
 		spreadsheetsAPI,
 		receiptsService,
 		rdb,
-	).Run(context.Background())
+	).Run(ctx)
 	if err != nil {
 		panic(err)
 	}

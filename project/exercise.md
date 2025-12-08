@@ -1,28 +1,44 @@
-# Project: The Router
+# Project: Health checks
+
+You can now control how the service shuts down. Another good practice is being able to tell when it's up and ready to serve requests.
+
+The simple, common way to do this is to expose an HTTP endpoint like `/health` that returns a 200 status code once the service is ready.
+
+Here's an example using Echo:
+
+```go
+e.GET("/health", func(c echo.Context) error {
+	return c.String(http.StatusOK, "ok")
+})
+```
+
+The Watermill Router exposes a `Running` method. It returns a channel that gets closed once the Router is ready.
+You can use it like this:
+
+```go
+<-router.Running()
+```
 
 ## Exercise
 
 Exercise path: ./project
 
-**Rework your project to use the Router.**
+**Implement a health check endpoint in your project.**
 
-1. Remove the raw `Subscribe` calls and iteration over the messages.
-2. Replace them with Router's `AddConsumerHandler` methods.
+1. Expose an HTTP `GET /health` endpoint that returns a `200` status code and an `ok` message.
 
-You can name your handlers whatever you want but keep the same topic names.
-Keep two subscribers, each with its own consumer group; each handler should use one of the subscribers.
-
-**Remember: When using the Router, you shouldn't call `Ack()` or `Nack()` explicitly.**
-Instead, return the proper error from the handler function.
-
-3. **To run the Router, to call `Run` in a separate goroutine.**
-Do it in the `service` package in the Service's `Run()` method.
+2. Extend your service code, so it waits for the Router to be ready before starting the HTTP server.
+This way, the service is marked as healthy only when the Router is ready to process messages.
 
 ```go
-go func() {
-	err := router.Run(context.Background())
-	if err != nil {
-		panic(err)
+g.Go(func() error {
+	<-router.Running()
+	
+	err := e.Start(":8080")
+	if err != nil && !errors.Is(err, stdHTTP.ErrServerClosed) {
+		return err
 	}
-}()
+	
+	return nil
+})
 ```
