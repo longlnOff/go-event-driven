@@ -1,44 +1,84 @@
-# Project: Health checks
+# Project: Accepting more details
 
-You can now control how the service shuts down. Another good practice is being able to tell when it's up and ready to serve requests.
+{{background}}
 
-The simple, common way to do this is to expose an HTTP endpoint like `/health` that returns a 200 status code once the service is ready.
+Our integrations work correctly, but adding just the ticket IDs to the spreadsheet isn't that helpful.
+The operations team still has to manually look up the ticket details.
+We can help them out by adding more details in the spreadsheet.
 
-Here's an example using Echo:
+{{endbackground}}
 
-```go
-e.GET("/health", func(c echo.Context) error {
-	return c.String(http.StatusOK, "ok")
-})
+First, we're going to extend the webhook endpoint to accept more than ticket IDs.
+We're dropping support for `POST /tickets-confirmation`.
+Instead, we're going to expose `POST /tickets-status`.
+
+Previously, the endpoint accepted a list of ticket IDs; now it's going to accept a list of tickets.
+Each ticket has a ticket ID, a status, a customer email, and a price.
+
+For now, we only support `confirmed` tickets. We'll add other statuses later.
+
+Here's an example incoming HTTP request:
+
+```json
+{
+  "tickets": [
+    {
+      "ticket_id": "ticket-1",
+      "status": "confirmed",
+      "customer_email": "user@example.com",
+      "price": {
+        "amount": "50.00",
+        "currency": "EUR"
+      }
+    }
+  ]
+}
 ```
 
-The Watermill Router exposes a `Running` method. It returns a channel that gets closed once the Router is ready.
-You can use it like this:
+Go structs can look like this:
 
 ```go
-<-router.Running()
+type TicketsStatusRequest struct {
+	Tickets []TicketStatusRequest `json:"tickets"`
+}
+
+type TicketStatusRequest struct {
+	TicketID      string `json:"ticket_id"`
+	Status        string `json:"status"`
+	Price         Money  `json:"price"`
+	CustomerEmail string `json:"customer_email"`
+}
 ```
+
+We can also add a `Money` type in the `entities` package:
+It will be useful in many places later.
+
+```go
+package entities
+
+type Money struct {
+    Amount   string `json:"amount"`
+    Currency string `json:"currency"`
+}
+```
+
+{{tip}}
+
+Note that we keep the money's amount as a `string` instead of a `float64`.
+This is intentional.
+Don't use `float64` for money, as you may lose precision.
+
+In this training, we won't perform any calculations on the price, so using a `string` is fine.
+If you need to perform calculations, use a library like [github.com/shopspring/decimal](https://github.com/shopspring/decimal).
+
+{{endtip}}
 
 ## Exercise
 
 Exercise path: ./project
 
-**Implement a health check endpoint in your project.**
+**Replace the `POST /tickets-confirmation` endpoint with `POST /tickets-status`.**
 
-1. Expose an HTTP `GET /health` endpoint that returns a `200` status code and an `ok` message.
-
-2. Extend your service code, so it waits for the Router to be ready before starting the HTTP server.
-This way, the service is marked as healthy only when the Router is ready to process messages.
-
-```go
-g.Go(func() error {
-	<-router.Running()
-	
-	err := e.Start(":8080")
-	if err != nil && !errors.Is(err, stdHTTP.ErrServerClosed) {
-		return err
-	}
-	
-	return nil
-})
-```
+The handler should work the same.
+Publish messages with the ticket ID as the payload.
+We'll add more details in the next exercise.
