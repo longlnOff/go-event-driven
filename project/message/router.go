@@ -2,22 +2,23 @@ package message
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/redis/go-redis/v9"
+
+	ticketsEntity "tickets/entities"
 )
-
-
 
 type SpreadsheetsAPI interface {
 	AppendRow(ctx context.Context, sheetName string, row []string) error
 }
 
 type ReceiptsService interface {
-	IssueReceipt(ctx context.Context, ticketID string) error
+	IssueReceipt(ctx context.Context, request ticketsEntity.IssueReceiptRequest) error
 }
 
 func NewRouter(
@@ -47,12 +48,22 @@ func NewRouter(
 		"issue-receipt-handler",
 		"issue-receipt",
 		issueReceiptSub,
-		func (msg *message.Message) error {
-			err := receiptsService.IssueReceipt(msg.Context(), string(msg.Payload))
+		func(msg *message.Message) error {
+			payload := ticketsEntity.IssueReceiptPayload{}
+			err := json.Unmarshal(msg.Payload, &payload)
+			if err != nil {
+				return err
+			}
+			request := ticketsEntity.IssueReceiptRequest{
+				TicketID: payload.TicketID,
+				Price:    payload.Price,
+			}
+			err = receiptsService.IssueReceipt(msg.Context(), request)
 			if err != nil {
 				slog.With("error", err).Error("Error issuing receipt")
 				return err
 			}
+
 			return nil
 		},
 	)
@@ -61,12 +72,17 @@ func NewRouter(
 		"append-to-tracker-handler",
 		"append-to-tracker",
 		appendToTrackerSub,
-		func (msg *message.Message) error {
+		func(msg *message.Message) error {
+			payload := ticketsEntity.AppendToTrackerPayload{}
+			err = json.Unmarshal(msg.Payload, &payload)
+			if err != nil {
+				return err
+			}
 			err := spreadsheetsAPI.AppendRow(
 				msg.Context(),
 				"tickets-to-print",
-				[]string{string(msg.Payload)},
-			)			
+				[]string{payload.TicketID, payload.CustomerEmail, payload.Price.Amount, payload.Price.Currency},
+			)
 			if err != nil {
 				slog.With("error", err).Error("Error appending to tracker")
 				return err

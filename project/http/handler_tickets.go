@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -11,51 +12,16 @@ import (
 	ticketsEntity "tickets/entities"
 )
 
-type ticketsConfirmationRequest struct {
-	Tickets []string `json:"tickets"`
+type TicketStatusRequest struct {
+	TicketID      string              `json:"ticket_id"`
+	Status        string              `json:"status"`
+	Price         ticketsEntity.Money `json:"price"`
+	CustomerEmail string              `json:"customer_email"`
 }
-
-func (h Handler) PostTicketsConfirmation(c echo.Context) error {
-	var request ticketsConfirmationRequest
-	err := c.Bind(&request)
-	if err != nil {
-		return err
-	}
-
-	for _, ticket := range request.Tickets {
-		err := h.publisher.Publish(
-			"issue-receipt",
-			message.NewMessage(watermill.NewUUID(), []byte(ticket)),
-		)
-		if err != nil {
-			return err
-		}
-
-		err = h.publisher.Publish(
-			"append-to-tracker",
-			message.NewMessage(watermill.NewUUID(), []byte(ticket)),
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return c.NoContent(http.StatusOK)
-}
-
-
 
 type TicketsStatusRequest struct {
 	Tickets []TicketStatusRequest `json:"tickets"`
 }
-
-type TicketStatusRequest struct {
-	TicketID      string `json:"ticket_id"`
-	Status        string `json:"status"`
-	Price         ticketsEntity.Money  `json:"price"`
-	CustomerEmail string `json:"customer_email"`
-}
-
 
 func (h Handler) PostTicketsStatus(c echo.Context) error {
 	var request TicketsStatusRequest
@@ -67,17 +33,36 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 	for i := range request.Tickets {
 		ticket := request.Tickets[i]
 		if ticket.Status == "confirmed" {
-			err := h.publisher.Publish(
-				"issue-receipt",
-				message.NewMessage(watermill.NewUUID(), []byte(ticket.TicketID)),
-			)
+
+			eventReceipt := ticketsEntity.IssueReceiptPayload{
+				TicketID: ticket.TicketID,
+				Price:    ticket.Price,
+			}
+			messageReceipt, err := json.Marshal(eventReceipt)
 			if err != nil {
 				return err
 			}
 
 			err = h.publisher.Publish(
+				"issue-receipt",
+				message.NewMessage(watermill.NewUUID(), []byte(messageReceipt)),
+			)
+			if err != nil {
+				return err
+			}
+
+			eventTracker := ticketsEntity.AppendToTrackerPayload{
+				TicketID:      ticket.TicketID,
+				Price:         ticket.Price,
+				CustomerEmail: ticket.CustomerEmail,
+			}
+			messageTracker, err := json.Marshal(eventTracker)
+			if err != nil {
+				return err
+			}
+			err = h.publisher.Publish(
 				"append-to-tracker",
-				message.NewMessage(watermill.NewUUID(), []byte(ticket.TicketID)),
+				message.NewMessage(watermill.NewUUID(), []byte(messageTracker)),
 			)
 			if err != nil {
 				return err

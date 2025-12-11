@@ -17,11 +17,8 @@ func NewHttpRouter(
 		publisher: publisher,
 	}
 
-	e.GET("/health", func(c echo.Context) error {return c.String(http.StatusOK, "ok")})
-	e.POST("/tickets-confirmation", handler.PostTicketsConfirmation)
+	e.GET("/health", func(c echo.Context) error { return c.String(http.StatusOK, "ok") })
 	e.POST("/tickets-status", handler.PostTicketsStatus)
-
-
 
 	return e
 }

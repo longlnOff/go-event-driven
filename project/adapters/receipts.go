@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	ticketsEntity "tickets/entities"
 
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients/receipts"
@@ -22,9 +23,13 @@ func NewReceiptsServiceClient(clients *clients.Clients) *ReceiptsServiceClient {
 	return &ReceiptsServiceClient{clients: clients}
 }
 
-func (c ReceiptsServiceClient) IssueReceipt(ctx context.Context, ticketID string) error {
+func (c ReceiptsServiceClient) IssueReceipt(ctx context.Context, request ticketsEntity.IssueReceiptRequest) error {
 	resp, err := c.clients.Receipts.PutReceiptsWithResponse(ctx, receipts.CreateReceipt{
-		TicketId: ticketID,
+		TicketId: request.TicketID,
+		Price: receipts.Money{
+			MoneyAmount:   request.Price.Amount,
+			MoneyCurrency: request.Price.Currency,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to post receipt: %w", err)
