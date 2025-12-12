@@ -10,6 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	ticketsEntity "tickets/entities"
+	ticketsEvent "tickets/message/event"
 )
 
 type TicketStatusRequest struct {
@@ -34,39 +35,25 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 		ticket := request.Tickets[i]
 		if ticket.Status == "confirmed" {
 
-			eventReceipt := ticketsEntity.IssueReceiptPayload{
-				TicketID: ticket.TicketID,
-				Price:    ticket.Price,
-			}
-			messageReceipt, err := json.Marshal(eventReceipt)
-			if err != nil {
-				return err
-			}
-
-			err = h.publisher.Publish(
-				"issue-receipt",
-				message.NewMessage(watermill.NewUUID(), []byte(messageReceipt)),
-			)
-			if err != nil {
-				return err
-			}
-
-			eventTracker := ticketsEntity.AppendToTrackerPayload{
+			event := ticketsEntity.TicketBookingConfirmed{
+				Header:        ticketsEntity.NewMessageHeader(),
 				TicketID:      ticket.TicketID,
-				Price:         ticket.Price,
 				CustomerEmail: ticket.CustomerEmail,
+				Price:         ticket.Price,
 			}
-			messageTracker, err := json.Marshal(eventTracker)
+			messageData, err := json.Marshal(event)
 			if err != nil {
 				return err
 			}
+
 			err = h.publisher.Publish(
-				"append-to-tracker",
-				message.NewMessage(watermill.NewUUID(), []byte(messageTracker)),
+				ticketsEvent.TicketBookingConfirmedTopic,
+				message.NewMessage(watermill.NewUUID(), []byte(messageData)),
 			)
 			if err != nil {
 				return err
 			}
+
 		} else {
 			return fmt.Errorf("unknown ticket status: %s", ticket.Status)
 		}
