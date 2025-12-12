@@ -7,16 +7,15 @@ import (
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 )
 
-func (h Handler) AppendToTrackerConfirmedTicket(
+func (h Handler) CancelTicket(
 	ctx context.Context,
-	event ticketsEntity.TicketBookingConfirmed,
+	event ticketsEntity.TicketBookingCanceled,
 ) error {
 	logger := log.FromContext(ctx)
-	logger.Info("Appending ticket to the tracker")
-
+	logger.Info("Adding ticket refund to sheet")
 	err := h.spreadsheetsAPI.AppendRow(
 		ctx,
-		"tickets-to-print",
+		"tickets-to-refund",
 		[]string{event.TicketID, event.CustomerEmail, event.Price.Amount, event.Price.Currency},
 	)
 

@@ -1,9 +1,7 @@
 package message
 
 import (
-	"context"
 	"encoding/json"
-	"log/slog"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
@@ -11,34 +9,35 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	ticketsEntity "tickets/entities"
+	ticketsEvent "tickets/message/event"
 )
 
-type SpreadsheetsAPI interface {
-	AppendRow(ctx context.Context, sheetName string, row []string) error
-}
-
-type ReceiptsService interface {
-	IssueReceipt(ctx context.Context, request ticketsEntity.IssueReceiptRequest) error
-}
-
 func NewRouter(
-	spreadsheetsAPI SpreadsheetsAPI,
-	receiptsService ReceiptsService,
+	eventHandler *ticketsEvent.Handler,
 	rdb redis.UniversalClient,
 	watermillLogger watermill.LoggerAdapter,
 ) *message.Router {
 	router := message.NewDefaultRouter(watermillLogger)
+	AddMiddleWare(router)
 	issueReceiptSub, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{
 		Client:        rdb,
-		ConsumerGroup: "issue-receipt",
+		ConsumerGroup: ticketsEvent.IssueReceiptConsumerGroup,
 	}, watermillLogger)
 	if err != nil {
 		panic(err)
 	}
 
-	appendToTrackerSub, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{
+	appendToTrackerConfirmedTicketSub, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{
 		Client:        rdb,
-		ConsumerGroup: "append-to-tracker",
+		ConsumerGroup: ticketsEvent.AppendToTrackerConsumerGroup,
+	}, watermillLogger)
+	if err != nil {
+		panic(err)
+	}
+
+	appendToRefundTicketSub, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{
+		Client:        rdb,
+		ConsumerGroup: ticketsEvent.AppendToRefundTicket,
 	}, watermillLogger)
 	if err != nil {
 		panic(err)
@@ -46,48 +45,55 @@ func NewRouter(
 
 	router.AddConsumerHandler(
 		"issue-receipt-handler",
-		"issue-receipt",
+		ticketsEvent.TicketBookingConfirmedTopic,
 		issueReceiptSub,
 		func(msg *message.Message) error {
-			payload := ticketsEntity.IssueReceiptPayload{}
-			err := json.Unmarshal(msg.Payload, &payload)
+			event := ticketsEntity.TicketBookingConfirmed{}
+			err := json.Unmarshal(msg.Payload, &event)
 			if err != nil {
-				return err
-			}
-			request := ticketsEntity.IssueReceiptRequest{
-				TicketID: payload.TicketID,
-				Price:    payload.Price,
-			}
-			err = receiptsService.IssueReceipt(msg.Context(), request)
-			if err != nil {
-				slog.With("error", err).Error("Error issuing receipt")
 				return err
 			}
 
-			return nil
+			return eventHandler.IssueReceipt(
+				msg.Context(),
+				event,
+			)
 		},
 	)
 
 	router.AddConsumerHandler(
 		"append-to-tracker-handler",
-		"append-to-tracker",
-		appendToTrackerSub,
+		ticketsEvent.TicketBookingConfirmedTopic,
+		appendToTrackerConfirmedTicketSub,
 		func(msg *message.Message) error {
-			payload := ticketsEntity.AppendToTrackerPayload{}
-			err = json.Unmarshal(msg.Payload, &payload)
+			event := ticketsEntity.TicketBookingConfirmed{}
+			err = json.Unmarshal(msg.Payload, &event)
 			if err != nil {
 				return err
 			}
-			err := spreadsheetsAPI.AppendRow(
+
+			return eventHandler.AppendToTrackerConfirmedTicket(
 				msg.Context(),
-				"tickets-to-print",
-				[]string{payload.TicketID, payload.CustomerEmail, payload.Price.Amount, payload.Price.Currency},
+				event,
 			)
+		},
+	)
+
+	router.AddConsumerHandler(
+		"append-to-refund-ticket",
+		ticketsEvent.TicketBookingCanceledTopic,
+		appendToRefundTicketSub,
+		func(msg *message.Message) error {
+			event := ticketsEntity.TicketBookingCanceled{}
+			err = json.Unmarshal(msg.Payload, &event)
 			if err != nil {
-				slog.With("error", err).Error("Error appending to tracker")
 				return err
 			}
-			return nil
+
+			return eventHandler.CancelTicket(
+				msg.Context(),
+				event,
+			)
 		},
 	)
 

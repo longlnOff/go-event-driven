@@ -27,6 +27,9 @@ type TicketsStatusRequest struct {
 func (h Handler) PostTicketsStatus(c echo.Context) error {
 	var request TicketsStatusRequest
 	err := c.Bind(&request)
+
+	correlationID := c.Request().Header.Get("Correlation-ID")
+
 	if err != nil {
 		return err
 	}
@@ -34,7 +37,6 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 	for i := range request.Tickets {
 		ticket := request.Tickets[i]
 		if ticket.Status == "confirmed" {
-
 			event := ticketsEntity.TicketBookingConfirmed{
 				Header:        ticketsEntity.NewMessageHeader(),
 				TicketID:      ticket.TicketID,
@@ -46,14 +48,35 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 				return err
 			}
 
+			msg := message.NewMessage(watermill.NewUUID(), []byte(messageData))
+			msg.Metadata.Set("correlation_id", correlationID)
 			err = h.publisher.Publish(
 				ticketsEvent.TicketBookingConfirmedTopic,
-				message.NewMessage(watermill.NewUUID(), []byte(messageData)),
+				msg,
 			)
 			if err != nil {
 				return err
 			}
-
+		} else if ticket.Status == "canceled" {
+			event := ticketsEntity.TicketBookingCanceled{
+				Header:        ticketsEntity.NewMessageHeader(),
+				TicketID:      ticket.TicketID,
+				CustomerEmail: ticket.CustomerEmail,
+				Price:         ticket.Price,
+			}
+			messageData, err := json.Marshal(event)
+			if err != nil {
+				return err
+			}
+			msg := message.NewMessage(watermill.NewUUID(), []byte(messageData))
+			msg.Metadata.Set("correlation_id", correlationID)
+			err = h.publisher.Publish(
+				ticketsEvent.TicketBookingCanceledTopic,
+				msg,
+			)
+			if err != nil {
+				return err
+			}
 		} else {
 			return fmt.Errorf("unknown ticket status: %s", ticket.Status)
 		}
