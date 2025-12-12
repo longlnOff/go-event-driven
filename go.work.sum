@@ -1,4 +1,6 @@
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0 h1:t527LHHE3HmiHrq74QMpNPZpGCIJzTx+apLkMKt4HC0=
+github.com/ThreeDotsLabs/humanslog v0.0.0-20251212101824-8c477a7aa7fa h1:IEwy4u3alyFsTJY7nmtxV6J3ODTQBQH+hADUKgka2+k=
+github.com/ThreeDotsLabs/humanslog v0.0.0-20251212101824-8c477a7aa7fa/go.mod h1:RjSlLA+mS/2QPeANJE2kVnBmioInQEfYjPN4nj2oJ0w=
 github.com/ThreeDotsLabs/watermill-redisstream v1.4.3/go.mod h1:69++855LyB+ckYDe60PiJLBcUrpckfDE2WwyzuVJRCk=
 github.com/alecthomas/kingpin/v2 v2.4.0 h1:f48lwail6p8zpO1bC4TxtqACaGqHYA22qkHjHpqDjYY=
 github.com/alecthomas/kingpin/v2 v2.4.0/go.mod h1:0gyi0zQnjuFk8xrkNKamJoyUo382HRL7ATRpFZCw6tE=

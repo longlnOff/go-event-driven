@@ -3,7 +3,7 @@ module tickets
 go 1.24
 
 require (
-	github.com/ThreeDotsLabs/go-event-driven/v2 v2.0.0
+	github.com/ThreeDotsLabs/go-event-driven/v2 v2.0.3
 	github.com/ThreeDotsLabs/watermill v1.5.1
 	github.com/ThreeDotsLabs/watermill-redisstream v1.4.5
 	github.com/labstack/echo/v4 v4.13.4
