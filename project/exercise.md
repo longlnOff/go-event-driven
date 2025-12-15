@@ -1,61 +1,21 @@
-# Code Bugs
+# Project: Testing Ticket Cancellation
 
-One more source of errors is the classic code bug. 
-
-For example, suppose the event payload contains a phone number:
-
-```go
-type BookingCreated struct {
-	BookingID string `json:"booking_id"`
-	Phone     string `json:"phone"`
-}
-```
-
-The publisher follows the contract and sends a payload:
-
-```json
-{
-    "booking_id": "c7d6e6c0-19b9-4783-97d7-89eee336fa26",
-    "phone": "+123456789"
-}
-```
-
-However, your handler expects the phone number to be in a different format. You assumed the country code would be there,
-but without the plus sign:
-
-```go
-phonePattern := regexp.MustCompile(`^\d+$`)
-
-if !phonePattern.MatchString(bookingCreated.Phone) {
-	return errors.New("invalid phone number")
-}
-```
-
-The messages start queueing up and get redelivered, failing endlessly.
-
-The solution is the *fix-forward* approach.
-You have to fix the regexp:
-
-```go
-phonePattern := regexp.MustCompile(`^\+\d+$`)
-```
-
-Once you deploy the new version of the service, all messages will eventually be processed.
-
-This is where the retry approach shines: You don't need to worry about the stuck messages.
-Temporary errors should auto-heal, and you can easily fix code bugs without manual intervention.
-
+Now that we covered the happy path scenario, let's consider the ticket cancellation.
 
 ## Exercise
 
 Exercise path: ./project
 
-For a brief time, we've been publishing incorrect `TicketBookingConfirmed` events.
-They were missing the `Currency` field. Thankfully, this happened only for tickets bought with `USD`.
+Based on the previous steps, **write tests for ticket cancellation.**
 
-1. **Update your message handlers to use the `USD` currency if it's missing in the event.**
+1. Call the API again with ticket's `status` set to `canceled`.
+2. Assert that the ticket has been added to the `tickets-to-refund` sheet.
 
-2. Remove the temporary fix from the previous exercise.
-   
-   When adding such temporary fixes, it's critical not to forget to remove them later.
-   Don't forget to leave a TODO comment or task in your issue tracker to remove this fix.
+{{tip}}
+
+When adding tests to existing functionality, it's a good practice to use the *test sabotage* technique.
+
+Write the test, make it pass, and then break the code to see if the test fails.
+This approach has saved us many times from having tests that weren't testing anything.
+
+{{endtip}}

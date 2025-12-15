@@ -48,20 +48,8 @@ func NewRouter(
 		ticketsEvent.TicketBookingConfirmedTopic,
 		issueReceiptSub,
 		func(msg *message.Message) error {
-			// TODO: Remove once fixed
-			if string(msg.UUID) == "2beaf5bc-d5e4-4653-b075-2b36bbf28949" {
-				return nil
-			}
-			if msg.Metadata.Get("type") != ticketsEvent.TicketBookingConfirmedTopic {
-				return nil
-			}
 			event := ticketsEntity.TicketBookingConfirmed{}
 			err := json.Unmarshal(msg.Payload, &event)
-
-			// TODO: remove once fixed
-			if event.Price.Currency == "" {
-				event.Price.Currency = "USD"
-			}
 			if err != nil {
 				return err
 			}
@@ -78,20 +66,8 @@ func NewRouter(
 		ticketsEvent.TicketBookingConfirmedTopic,
 		appendToTrackerConfirmedTicketSub,
 		func(msg *message.Message) error {
-			// TODO: Remove once fixed
-			if string(msg.UUID) == "2beaf5bc-d5e4-4653-b075-2b36bbf28949" {
-				return nil
-			}
-			if msg.Metadata.Get("type") != ticketsEvent.TicketBookingConfirmedTopic {
-				return nil
-			}
 			event := ticketsEntity.TicketBookingConfirmed{}
 			err = json.Unmarshal(msg.Payload, &event)
-
-			// TODO: remove once fixed
-			if event.Price.Currency == "" {
-				event.Price.Currency = "USD"
-			}
 			if err != nil {
 				return err
 			}

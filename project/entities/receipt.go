@@ -1,6 +1,6 @@
 package entities
 
 type IssueReceiptRequest struct {
-	TicketID string
-	Price    Money
+	TicketID string `json:"ticket_id"`
+	Price    Money  `json:"price"`
 }

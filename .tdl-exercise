@@ -1,4 +1,4 @@
-exercise_id = "8db79ebd-0fb4-4e2c-bf7b-7f2d393f5dac"
-directory = "project"
-is_text_only = false
-is_optional = false
+exercise_id = "830d207a-3307-4af8-8183-2bbacba425e9"
+directory = "08-component-tests/06-further-reading"
+is_text_only = true
+is_optional = true

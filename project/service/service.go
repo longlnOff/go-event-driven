@@ -51,11 +51,11 @@ func New(
 }
 
 func (s Service) Run(ctx context.Context) error {
-	errgrp, ctx := errgroup.WithContext(ctx)
-	errgrp.Go(func() error {
+	errGroup, ctx := errgroup.WithContext(ctx)
+	errGroup.Go(func() error {
 		return s.messageRouter.Run(ctx)
 	})
-	errgrp.Go(func() error {
+	errGroup.Go(func() error {
 		<-s.messageRouter.Running()
 
 		err := s.echoRouter.Start(":8080")
@@ -64,10 +64,10 @@ func (s Service) Run(ctx context.Context) error {
 		}
 		return nil
 	})
-	errgrp.Go(func() error {
+	errGroup.Go(func() error {
 		<-ctx.Done()
 		return s.echoRouter.Shutdown(context.Background())
 	})
 
-	return errgrp.Wait()
+	return errGroup.Wait()
 }
