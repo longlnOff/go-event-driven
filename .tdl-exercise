@@ -1,4 +1,4 @@
-exercise_id = "830d207a-3307-4af8-8183-2bbacba425e9"
-directory = "08-component-tests/06-further-reading"
-is_text_only = true
-is_optional = true
+exercise_id = "0d6ba621-3137-4c1c-8306-aca90e5bef93"
+directory = "09-cqrs-events/06-cqrs-with-consumer-groups"
+is_text_only = false
+is_optional = false
