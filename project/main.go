@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
+	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
+	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
+	"github.com/jmoiron/sqlx"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-
-	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
-	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
-
 	ticketsAdapter "tickets/adapters"
 	ticketsMessage "tickets/message"
 	ticketsService "tickets/service"
@@ -17,6 +16,12 @@ import (
 
 func main() {
 	log.Init(slog.LevelInfo)
+
+	db, err := sqlx.Open("postgres", os.Getenv("POSTGRES_URL"))
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
 
 	apiClients, err := clients.NewClients(
 		os.Getenv("GATEWAY_ADDR"),
@@ -38,6 +43,7 @@ func main() {
 	rdb := ticketsMessage.NewRedisClient(os.Getenv("REDIS_ADDR"))
 
 	err = ticketsService.New(
+		db,
 		spreadsheetsAPI,
 		receiptsService,
 		rdb,

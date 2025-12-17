@@ -37,6 +37,14 @@ func NewRouter(
 			"IssueReceipt",
 			eventHandler.IssueReceipt,
 		),
+		cqrs.NewEventHandler(
+			"StoreTicket",
+			eventHandler.StoreTickets,
+		),
+		cqrs.NewEventHandler(
+			"RemoveCanceledTicket",
+			eventHandler.RemoveCanceledTicket,
+		),
 	)
 	if err != nil {
 		panic(err)
