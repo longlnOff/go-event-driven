@@ -1,6 +1,7 @@
 package message
 
 import (
+	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -15,6 +16,7 @@ func NewRedisPublisher(rdb redis.UniversalClient, watermillLogger watermill.Logg
 	if err != nil {
 		panic(err)
 	}
+	pub = log.CorrelationPublisherDecorator{pub}
 
 	return pub
 }

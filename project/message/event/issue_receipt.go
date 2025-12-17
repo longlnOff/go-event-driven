@@ -9,7 +9,7 @@ import (
 
 func (h Handler) IssueReceipt(
 	ctx context.Context,
-	event ticketsEntity.TicketBookingConfirmed,
+	event *ticketsEntity.TicketBookingConfirmed,
 ) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Issue Receipt")

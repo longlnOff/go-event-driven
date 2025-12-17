@@ -7,9 +7,9 @@ import (
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 )
 
-func (h Handler) AppendToTrackerConfirmedTicket(
+func (h Handler) AppendToTracker(
 	ctx context.Context,
-	event ticketsEntity.TicketBookingConfirmed,
+	event *ticketsEntity.TicketBookingConfirmed,
 ) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Appending ticket to the tracker")

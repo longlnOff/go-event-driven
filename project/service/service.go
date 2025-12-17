@@ -30,18 +30,24 @@ func New(
 
 	watermillLogger := watermill.NewSlogLogger(log.FromContext(context.Background()))
 	publisher := ticketsMessage.NewRedisPublisher(rdb, watermillLogger)
+	eventBus := ticketsEvent.NewEventBus(publisher, watermillLogger)
+
 	eventHandler := ticketsEvent.NewEventHandler(
 		spreadsheetsAPI,
 		receiptsService,
 	)
-	router := ticketsMessage.NewRouter(
-		eventHandler,
+	eventProcessorConfig := ticketsEvent.NewEventProcessorConfig(
 		rdb,
+		watermillLogger,
+	)
+	router := ticketsMessage.NewRouter(
+		*eventProcessorConfig,
+		eventHandler,
 		watermillLogger,
 	)
 
 	echoRouter := ticketsHttp.NewHttpRouter(
-		publisher,
+		eventBus,
 	)
 
 	return Service{

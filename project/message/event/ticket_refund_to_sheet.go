@@ -7,9 +7,9 @@ import (
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 )
 
-func (h Handler) CancelTicket(
+func (h Handler) TicketRefundToSheet(
 	ctx context.Context,
-	event ticketsEntity.TicketBookingCanceled,
+	event *ticketsEntity.TicketBookingCanceled,
 ) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Adding ticket refund to sheet")

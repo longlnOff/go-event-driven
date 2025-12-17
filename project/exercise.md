@@ -1,21 +1,48 @@
-# Project: Testing Ticket Cancellation
+# Using Event Processor in the project
 
-Now that we covered the happy path scenario, let's consider the ticket cancellation.
+Now it's time to use the Event Processor in your project.
 
 ## Exercise
 
 Exercise path: ./project
 
-Based on the previous steps, **write tests for ticket cancellation.**
+Update your project to use Event Processor instead of the raw Router.
 
-1. Call the API again with ticket's `status` set to `canceled`.
-2. Assert that the ticket has been added to the `tickets-to-refund` sheet.
+Here are some tips on how to do this:
+
+1. Replace the Router handlers with an EventProcessor and EventHandlers.
+2. **Remember to create a new subscriber instance `SubscriberConstructor`** so each handler will use a separate subscriber. 
+   Like you did in the {{exerciseLink "the previous exercise" "09-cqrs-events" "06-cqrs-with-consumer-groups"}}.
+   If you don't, your message will be processed by only one handler.
+
+You should not do any JSON unmarshaling yourself. Just pass `JSONMarshaler` to the EventProcessor.
+
+After these changes, you should have much less boilerplate code in the project.
+You can also be sure that all marshaling and topic topology is consistent across the project.
 
 {{tip}}
 
-When adding tests to existing functionality, it's a good practice to use the *test sabotage* technique.
+Do you remember how, in {{exerciseLink "the errors module" "07-errors" "03-project-malformed-messages"}}, we ignored malformed messages with the wrong message type?
+We no longer use this metadata, so if this check is still in your code, it will cause all messages to be ignored.
+Make sure that you don't have code like this in your project:
 
-Write the test, make it pass, and then break the code to see if the test fails.
-This approach has saved us many times from having tests that weren't testing anything.
+```go
+if msg.Metadata.Get("type") != "booking.created" {
+	slog.Error("Invalid message type")
+	return nil
+}
+```
+
+{{endtip}}
+
+{{tip}}
+
+If your service doesn't work as expected, double-check that all components use the correct topics.
+Logs should be useful for debugging.
+You may want to increase the log level to `debug` or `trace` to see more.   
+
+```go
+log.Init(watermill.LevelTrace)
+```
 
 {{endtip}}
