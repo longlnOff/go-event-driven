@@ -12,3 +12,7 @@ type SpreadsheetsAPI interface {
 type ReceiptsService interface {
 	IssueReceipt(ctx context.Context, request ticketsEntity.IssueReceiptRequest) error
 }
+
+type FilesService interface {
+	PrintTickets(ctx context.Context, ticketFile string, body string) error
+}

@@ -4,6 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	ticketsDB "tickets/db"
+	ticketsHttp "tickets/http"
+	ticketsMessage "tickets/message"
+	ticketsEvent "tickets/message/event"
+
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -12,11 +18,6 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
-	"net/http"
-	ticketsDB "tickets/db"
-	ticketsHttp "tickets/http"
-	ticketsMessage "tickets/message"
-	ticketsEvent "tickets/message/event"
 )
 
 type Service struct {
@@ -29,6 +30,7 @@ func New(
 	dbConn *sqlx.DB,
 	spreadsheetsAPI ticketsEvent.SpreadsheetsAPI,
 	receiptsService ticketsEvent.ReceiptsService,
+	fileService ticketsEvent.FilesService,
 	rdb redis.UniversalClient,
 ) Service {
 
@@ -41,7 +43,9 @@ func New(
 	eventHandler := ticketsEvent.NewEventHandler(
 		spreadsheetsAPI,
 		receiptsService,
+		fileService,
 		ticketRepo,
+		eventBus,
 	)
 	eventProcessorConfig := ticketsEvent.NewEventProcessorConfig(
 		rdb,
@@ -55,6 +59,7 @@ func New(
 
 	echoRouter := ticketsHttp.NewHttpRouter(
 		eventBus,
+		ticketRepo,
 	)
 
 	return Service{

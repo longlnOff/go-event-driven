@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
-	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
-	"github.com/jmoiron/sqlx"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,6 +9,10 @@ import (
 	ticketsAdapter "tickets/adapters"
 	ticketsMessage "tickets/message"
 	ticketsService "tickets/service"
+
+	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
+	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
+	"github.com/jmoiron/sqlx"
 )
 
 func main() {
@@ -39,6 +40,7 @@ func main() {
 
 	spreadsheetsAPI := ticketsAdapter.NewSpreadsheetsAPIClient(apiClients)
 	receiptsService := ticketsAdapter.NewReceiptsServiceClient(apiClients)
+	fileService := ticketsAdapter.NewFileServiceClient(apiClients)
 
 	rdb := ticketsMessage.NewRedisClient(os.Getenv("REDIS_ADDR"))
 
@@ -46,6 +48,7 @@ func main() {
 		db,
 		spreadsheetsAPI,
 		receiptsService,
+		fileService,
 		rdb,
 	).Run(ctx)
 	if err != nil {

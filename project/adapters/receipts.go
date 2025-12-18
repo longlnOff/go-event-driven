@@ -30,6 +30,7 @@ func (c ReceiptsServiceClient) IssueReceipt(ctx context.Context, request tickets
 			MoneyAmount:   request.Price.Amount,
 			MoneyCurrency: request.Price.Currency,
 		},
+		IdempotencyKey: &request.IdempotencyKey,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to post receipt: %w", err)

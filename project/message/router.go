@@ -45,6 +45,10 @@ func NewRouter(
 			"RemoveCanceledTicket",
 			eventHandler.RemoveCanceledTicket,
 		),
+		cqrs.NewEventHandler(
+			"PrintConfirmedTicket",
+			eventHandler.PrintTickets,
+		),
 	)
 	if err != nil {
 		panic(err)
