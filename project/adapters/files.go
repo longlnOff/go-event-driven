@@ -22,7 +22,7 @@ func NewFileServiceClient(clients *clients.Clients) *FileServiceClient {
 	return &FileServiceClient{clients: clients}
 }
 
-func (c FileServiceClient) PrintTickets(ctx context.Context, ticketFile string, body string) error {
+func (c FileServiceClient) UpLoadFile(ctx context.Context, ticketFile string, body string) error {
 	resp, err := c.clients.Files.PutFilesFileIdContentWithTextBodyWithResponse(ctx, ticketFile, body)
 	if err != nil {
 		return fmt.Errorf("failed to print ticket: %w", err)

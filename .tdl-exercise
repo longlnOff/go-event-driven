@@ -1,4 +1,4 @@
-exercise_id = "2ea11966-0ae8-4570-9ed0-aca3412b3677"
-directory = "project"
-is_text_only = false
+exercise_id = "db826645-0435-4060-bfe0-afe9b99ea357"
+directory = "11-outbox/01-project-replacing-dead-nation"
+is_text_only = true
 is_optional = false

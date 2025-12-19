@@ -7,6 +7,23 @@ import (
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 )
 
+type SpreadsheetsAPI interface {
+	AppendRow(ctx context.Context, sheetName string, row []string) error
+}
+
+type ReceiptsService interface {
+	IssueReceipt(ctx context.Context, request ticketsEntity.IssueReceiptRequest) error
+}
+
+type FilesService interface {
+	UpLoadFile(ctx context.Context, ticketFile string, body string) error
+}
+
+type TicketsRepository interface {
+	Add(ctx context.Context, ticket ticketsEntity.Ticket) error
+	Remove(ctx context.Context, ticket ticketsEntity.Ticket) error
+}
+
 type Handler struct {
 	spreadsheetsAPI  SpreadsheetsAPI
 	receiptsService  ReceiptsService
@@ -44,9 +61,4 @@ func NewEventHandler(
 		ticketRepository: ticketRepository,
 		eventBus:         eventBus,
 	}
-}
-
-type TicketsRepository interface {
-	Add(ctx context.Context, ticket ticketsEntity.Ticket) error
-	Remove(ctx context.Context, ticket ticketsEntity.Ticket) error
 }

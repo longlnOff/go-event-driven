@@ -26,13 +26,13 @@ func (h Handler) PrintTickets(
 		</html>`
 	fileName := fmt.Sprintf("%s-ticket.html", event.TicketID)
 
-	err := h.fileService.PrintTickets(ctx, fileName, body)
+	err := h.fileService.UpLoadFile(ctx, fileName, body)
 	if err != nil {
 		return err
 	}
 
 	ticketPrintedEvent := ticketsEntity.TicketPrinted{
-		Header:   ticketsEntity.NewMessageHeader(),
+		Header:   ticketsEntity.NewMessageHeaderWithIdempotencyKey(event.Header.IdempotencyKey),
 		TicketID: event.TicketID,
 		FileName: fileName,
 	}

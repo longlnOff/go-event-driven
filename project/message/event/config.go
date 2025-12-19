@@ -8,6 +8,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+var (
+	jsonMarshaler = cqrs.JSONMarshaler{
+		GenerateName: cqrs.StructName,
+	}
+)
+
 func NewEventProcessorConfig(
 	rdb redis.UniversalClient,
 	logger watermill.LoggerAdapter,

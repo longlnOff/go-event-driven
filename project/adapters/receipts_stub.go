@@ -8,7 +8,7 @@ import (
 
 type ReceiptsServiceStub struct {
 	lock           sync.Mutex
-	IssuedReceipts []entities.IssueReceiptRequest
+	IssuedReceipts map[string]entities.IssueReceiptRequest
 }
 
 func (s *ReceiptsServiceStub) IssueReceipt(
@@ -17,7 +17,6 @@ func (s *ReceiptsServiceStub) IssueReceipt(
 ) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.IssuedReceipts = append(s.IssuedReceipts, request)
-
+	s.IssuedReceipts[request.IdempotencyKey] = request
 	return nil
 }
