@@ -1,11 +1,12 @@
 package http
 
 import (
-	"fmt"
-	"github.com/ThreeDotsLabs/watermill"
-	"github.com/labstack/echo/v4"
+	"errors"
 	"net/http"
 	ticketsEntity "tickets/entities"
+
+	"github.com/ThreeDotsLabs/watermill"
+	"github.com/labstack/echo/v4"
 )
 
 type CreateBookingRequest struct {
@@ -33,9 +34,12 @@ func (h Handler) CreateBooking(c echo.Context) error {
 		NumberOfTickets: request.NumberOfTickets,
 		CustomerEmail:   request.CustomerEmail,
 	}
-	if err := h.bookingRepository.AddBooking(c.Request().Context(), booking); err != nil {
-		return fmt.Errorf(err.Error())
+	err = h.bookingRepository.AddBooking(c.Request().Context(), booking)
+	if err != nil {
+		if errors.As(err, &echo.ErrBadRequest) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-
 	return c.JSON(http.StatusCreated, BookingResponse{BookingID: booking.BookingID})
 }

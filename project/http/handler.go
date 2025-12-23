@@ -19,6 +19,7 @@ type TicketsRepository interface {
 }
 type ShowsRepository interface {
 	AddShow(ctx context.Context, show ticketsEntity.Show) error
+	ShowByID(ctx context.Context, showID string) (ticketsEntity.Show, error)
 }
 
 type BookingRepository interface {

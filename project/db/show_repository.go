@@ -21,8 +21,8 @@ func NewShowsRepository(db *sqlx.DB) ShowsRepository {
 	return ShowsRepository{db: db}
 }
 
-func (t ShowsRepository) AddShow(ctx context.Context, show ticketsEntity.Show) error {
-	_, err := t.db.NamedExecContext(
+func (s ShowsRepository) AddShow(ctx context.Context, show ticketsEntity.Show) error {
+	_, err := s.db.NamedExecContext(
 		ctx,
 		`
        INSERT INTO
@@ -51,4 +51,14 @@ func (t ShowsRepository) AddShow(ctx context.Context, show ticketsEntity.Show) e
 	}
 
 	return nil
+}
+
+func (s ShowsRepository) ShowByID(ctx context.Context, showID string) (ticketsEntity.Show, error) {
+	var show ticketsEntity.Show
+	err := s.db.GetContext(ctx, &show, `SELECT * FROM shows WHERE show_id = $1`, showID)
+	if err != nil {
+		return ticketsEntity.Show{}, err
+	}
+
+	return show, nil
 }

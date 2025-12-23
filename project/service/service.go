@@ -32,6 +32,7 @@ func New(
 	spreadsheetsAPI ticketsEvent.SpreadsheetsAPI,
 	receiptsService ticketsEvent.ReceiptsService,
 	fileService ticketsEvent.FilesService,
+	deadNationService ticketsEvent.DeadNationService,
 	rdb redis.UniversalClient,
 ) Service {
 
@@ -49,7 +50,9 @@ func New(
 		spreadsheetsAPI,
 		receiptsService,
 		fileService,
+		deadNationService,
 		ticketRepo,
+		showRepo,
 		eventBus,
 	)
 	eventProcessorConfig := ticketsEvent.NewEventProcessorConfig(

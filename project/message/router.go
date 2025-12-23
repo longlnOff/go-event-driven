@@ -1,11 +1,12 @@
 package message
 
 import (
+	ticketsEvent "tickets/message/event"
+	ticketsOutbox "tickets/message/outbox"
+
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/ThreeDotsLabs/watermill/message"
-	ticketsEvent "tickets/message/event"
-	ticketsOutbox "tickets/message/outbox"
 )
 
 func NewRouter(
@@ -50,6 +51,10 @@ func NewRouter(
 		cqrs.NewEventHandler(
 			"PrintConfirmedTicket",
 			eventHandler.PrintTickets,
+		),
+		cqrs.NewEventHandler(
+			"CallDeadNation",
+			eventHandler.CallDeadNation,
 		),
 	)
 	if err != nil {

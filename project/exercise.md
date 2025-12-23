@@ -1,188 +1,118 @@
-# Emitting BookingMade event
+# Add ticket limits
 
-It's time to publish the `BookingMade` event!
+The final feature we need to implement is limits on how many tickets we can sell.
+We have this information in the `shows` table, so now we just need to enforce it.
+
+{{background}}
+
+For more popular shows, our API may receive up to 20 concurrent requests to book tickets for the same show.
+We'll make sure that our system can handle this without overbooking.
+
+{{endbackground}}
 
 ## Exercise
 
 Exercise path: ./project
 
-Publish the `BookingMade` event during a call to the `POST /book-tickets` endpoint.
-**It must be emitted in one transaction with the booking stored in the database.**
+1. Enforce the limit of available tickets in the `POST /book-tickets` endpoint.
 
-In the payload, you should include the following:
+The endpoint should return `http.StatusBadRequest` if there are not enough tickets available.
 
-- Booking ID
-- Number of tickets
-- Customer email
-- Show ID
-
-You can use this Go structure as a starting point:
-
-```go
-type BookingMade struct {
-    Header MessageHeader `json:"header"`
-
-    NumberOfTickets int    `json:"number_of_tickets"`
-    BookingID       string `json:"booking_id"`
-    CustomerEmail   string `json:"customer_email"`
-    ShowID          string `json:"show_id"`
-}
-```
-
-1. Create an `EventBus` instance using the outbox publisher (like in the {{exerciseLink "previous exercise" "11-outbox" "08-publishing-events-with-forwarder"}}).
-
-**It must be created per transaction,** so the constructors should be called for every transaction.
-
-Remember to decorate the publisher with the forwarder, so it goes through the outbox (like in the {{exerciseLink "07-forwarding-with-outbox" "11-outbox" "07-forwarding-with-outbox"}}).
-Use the `events_to_forward` topic in the configuration.
-
-2. Publish the event with your `EventBus`.
+It's fully up to you how you implement this logic.
+The simplest approach may be to do it inside the repository method used to store the booking.
+**You can get the number of available tickets, sum the already booked tickets, and check if the number of tickets to book is less than or equal to what's available.**
 
 {{tip}}
 
-Many parts need to be configured properly to make this work.
-
-If something breaks, logs are your friends!
-If you can't figure out what's wrong, ask the Mentor or share your solution on Discord.
-(Click the "Share your solution" button, choose the most recent one, and copy the link to the training Discord channel.)
+We are using Echo in our example code. You can learn more about returning errors in the [Echo documentation](https://echo.labstack.com/docs/error-handling).
 
 {{endtip}}
+
+Make sure that you do this within the same transaction when storing the booking in the database.
+
+2. You **must** use the `sql.LevelSerializable` isolation level to make sure no overbooking happens.
+We will be aggregating tickets from multiple rows, so the repeatable read isolation level will be insufficient.
+
+{{tip}}
+
+You can read more about PostgreSQL serializable transactions [in the official documentation](https://www.postgresql.org/docs/13/transaction-iso.html#XACT-SERIALIZABLE)
+and [this article](https://mkdev.me/posts/transaction-isolation-levels-with-postgresql-as-an-example).
+
+{{endtip}}
+
+We won't check your component tests, but we recommend implementing them.
+This is a critical functionality, so it's good to have tests that ensure it works as expected.
+
+You can check the {{exerciseLink "component testing" "08-component-tests" "03-project-running-service-in-tests"}} exercise for a reminder on how to run the tests locally.
 
 {{hints}}
 
 {{hint 1}}
 
-You need to create a new instance of the `message.Publisher` (like in the {{exerciseLink "previous exercise" "11-outbox" "08-publishing-events-with-forwarder"}}).
-In our project, we want to use it in the Event Bus instead of directly using the publisher.
+This is how an example query for summing up the already booked tickets may look:
+
+```sql
+SELECT
+	COALESCE(SUM(number_of_tickets), 0) AS already_booked_seats
+FROM
+	bookings
+WHERE
+	show_id = $1
+```
+
+{{endhint}}
+
+{{hint 2}}
+
+This is how an example extended implementation of the `AddBooking` method may look:
 
 ```go
 func (b BookingsRepository) AddBooking(ctx context.Context, booking entities.Booking) (err error) {
 	return updateInTx(
 		ctx,
 		b.db,
-		sql.LevelRepeatableRead,
+		sql.LevelSerializable,
 		func(ctx context.Context, tx *sqlx.Tx) error {
-            _, err = tx.NamedExecContext(ctx, `
+			availableSeats := 0
+			err = tx.GetContext(ctx, &availableSeats, `
+				SELECT
+					number_of_tickets AS available_seats
+				FROM
+					shows
+				WHERE
+					show_id = $1
+			`, booking.ShowID)
+			if err != nil {
+				return fmt.Errorf("could not get available seats: %w", err)
+			}
+
+			alreadyBookedSeats := 0
+			err = tx.GetContext(ctx, &alreadyBookedSeats, `
+				SELECT
+					COALESCE(SUM(number_of_tickets), 0) AS already_booked_seats
+				FROM
+					bookings
+				WHERE
+					show_id = $1
+			`, booking.ShowID)
+			if err != nil {
+				return fmt.Errorf("could not get already booked seats: %w", err)
+			}
+
+			if availableSeats-alreadyBookedSeats < booking.NumberOfTickets {
+				// this is usually a bad idea, learn more here: https://threedots.tech/post/introducing-clean-architecture/
+				// we'll improve it later
+				return echo.NewHTTPError(http.StatusBadRequest, "not enough seats available")
+			}
+
+			_, err = tx.NamedExecContext(ctx, `
 				INSERT INTO 
 					bookings (booking_id, show_id, number_of_tickets, customer_email) 
 				VALUES (:booking_id, :show_id, :number_of_tickets, :customer_email)
-		    `, booking)
-			
-			// ...
+		`, booking)
 
-			outboxPublisher, err := outbox.NewPublisherForDb(ctx, tx)
-			if err != nil {
-				return fmt.Errorf("could not create event bus: %w", err)
-			}
-
-			bus := event.NewBus(outboxPublisher)
-
-            // ...
-		},
-	)
-}
+		// ...	
 ```
-
-It's useful to wrap database transactions in such functions:
-
-```go
-func updateInTx(
-	ctx context.Context,
-	db *sqlx.DB,
-	isolation sql.IsolationLevel,
-	fn func(ctx context.Context, tx *sqlx.Tx) error,
-) (err error) {
-	tx, err := db.BeginTxx(ctx, &sql.TxOptions{Isolation: isolation})
-	if err != nil {
-		return fmt.Errorf("could not begin transaction: %w", err)
-	}
-
-	defer func() {
-		if err != nil {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				err = errors.Join(err, rollbackErr)
-			}
-			return
-		}
-
-		err = tx.Commit()
-	}()
-
-	return fn(ctx, tx)
-}
-```
-
-If anything fails, the transaction will be rolled back and no data will be stored in the database.
-
-
-{{ endhint }}
-
-{{hint 2}}
-
-If you compare your solution with our diffs, you may notice that we decorate the publisher twice with `log.CorrelationPublisherDecorator`
-
-```go
-publisher, err := watermillSQL.NewPublisher(
-	db,
-	watermillSQL.PublisherConfig{
-		SchemaAdapter: watermillSQL.DefaultPostgreSQLSchema{},
-	},
-	logger,
-)
-// ...
-publisher = log.CorrelationPublisherDecorator{publisher}
-
-publisher = forwarder.NewPublisher(publisher, forwarder.PublisherConfig{
-	ForwarderTopic: outboxTopic,
-})
-publisher = log.CorrelationPublisherDecorator{publisher}
-```
-
-It's because we want to include correlation ID both in the envelope and the event that is published to the Redis later.
-
-```mermaid
-graph TD
-    A[Publish] --> B[First CorrelationPublisherDecorator]
-    B --> C[Original Message with Correlation ID]
-    C --> D[Forwarder Publisher]
-    D --> E[Second CorrelationPublisherDecorator]
-    E --> F[Forwarder's Envelope Message with Correlation ID]
-    F --> G[PostgreSQL outbox_topic]
-
-    G --> H[Forwarder Process]
-    H --> I[Extract Original Message]
-    I --> J[Publish to Destination Topic]
-    J --> K[Redis Topic]
-
-    subgraph "Message Structure in PostgreSQL"
-        L[Envelope Message]
-        L --> M[Envelope Headers<br/>- Correlation ID<br/>- Destination Topic]
-        L --> N[Payload: Original Message]
-        N --> O[Original Headers<br/>- Correlation ID<br/>- Other metadata]
-        N --> P[Original Payload<br/>- Business data]
-    end
-
-    subgraph "Message Structure in Redis"
-        Q[Final Message]
-        Q --> R[Headers<br/>- Correlation ID<br/>- Other metadata]
-        Q --> S[Payload<br/>- Business data]
-    end
-
-    F -.-> L
-    K -.-> Q
-
-    style B fill:#e1f5fe
-    style E fill:#e1f5fe
-    style M fill:#fff3e0
-    style O fill:#fff3e0
-    style R fill:#fff3e0
-
-    classDef correlationBox fill:#ffeb3b,stroke:#f57f17,stroke-width:2px
-    class B,E correlationBox
-```
-
-This way, the correlation ID is included in both the envelope and the event itself, which can be useful for tracing and debugging.
-If you don't remember why we are enveloping messages, check the {{exerciseLink "08-publishing-events-with-forwarder" "11-outbox" "08-publishing-events-with-forwarder"}}.
 
 {{endhint}}
 
