@@ -1,82 +1,72 @@
-# Update component tests
+# Catching the Book Ticket request
 
-Did you remember to update the component tests?
-If not... it's time to do that now!
+So far, we operated on single tickets.
+But customers can book multiple tickets at once, so we need to introduce a new concept in our system: **booking**.
 
-{{tip}}
+A booking consists of:
 
-Since the {{exerciseLink "component tests module" "08-component-tests" "01-component-tests"}} was optional,
-you may have skipped it.
+- Booking ID
+- Show ID
+- Number of tickets
+- Customer email
 
-Would you like to go back to the component tests module and check it out?
-You can use `tdl tr jump` to jump to the module and complete it now.
+Next, we're going to implement the `POST /book-tickets` endpoint.
+It mimics the Dead Nation API.
 
-{{endtip}}
+This endpoint should accept requests in this format:
 
+```json
+{
+  "show_id": "0299a177-a68a-47fb-a9fb-7362a36efa69",
+  "number_of_tickets": 3,
+  "customer_email": "email@example.com"
+}
+```
 
-We won't check whether your test work.
-It's up to you if you want to fix them.
+You can use this Go structure as a starting point:
 
-You can find instructions on how to run component tests locally in the {{exerciseLink "Running the Service in Tests" "08-component-tests" "03-project-running-service-in-tests"}} exercise.
-
-Since we have added a database support, now we need to also pass the database connection URL to run tests:
-
-```bash
-# Mac or Linux
-REDIS_ADDR=localhost:6379 POSTGRES_URL=postgres://user:password@localhost:5432/db?sslmode=disable go test ./tests/ -v
-
-# Windows PowerShell
-$env:REDIS_ADDR="localhost:6379"; $env:POSTGRES_URL="postgres://user:password@localhost:5432/db?sslmode=disable"; go test ./tests/ -v
+```go
+type Booking struct {
+    BookingID       string `json:"booking_id" db:"booking_id"`
+    ShowID          string `json:"show_id" db:"show_id"`
+    NumberOfTickets int    `json:"number_of_tickets" db:"number_of_tickets"`
+    CustomerEmail   string `json:"customer_email" db:"customer_email"`
+}
 ```
 
 ## Exercise
 
 Exercise path: ./project
 
-1. Implement stub of Files API and inject it into service.
-2. Test idempotency of the `sendTicketsStatus` function by sending the same request multiple times with the same idempotency key.
-3. Check that tickets were printed by calling Files API
-4. Pass idempotency key calls of POST `/tickets-status`
-5. Check if ticket was stored in the database
+**Implement the `POST /book-tickets` endpoint.**
 
+It should store bookings in the `bookings` table. 
+(It's important to use this table name: We'll use it to check your solution.)
 
-If you want, you can spend some time on checking the idempotency of some scenarios that are not possible to test at the repository level, 
-such as issuing receipts. It's critical to make sure that receipts are issued only once for each ticket.
-We don't want to mess with the financial team, do we?
+You can use a schema like this:
 
+```sql
+CREATE TABLE IF NOT EXISTS bookings (
+    booking_id UUID PRIMARY KEY,
+    show_id UUID NOT NULL,
+    number_of_tickets INT NOT NULL,
+    customer_email VARCHAR(255) NOT NULL,
+    FOREIGN KEY (show_id) REFERENCES shows(show_id)
+);
+```
 
-{{hints}}
+The booking ID is not sent in the request — you should generate it on your side.
 
-{{hint 1}}
+The booking ID should be returned as the response from this endpoint with status code `201 Created`.
 
-This is how example implementation function that checks if ticket was stored in the repository looks like:
-
-```go
-func assertTicketStoredInRepository(t *testing.T, db *sqlx.DB, ticket ticketsHttp.TicketStatusRequest) {
-	ticketsRepo := dbAdapters.NewTicketsRepository(db)
-
-	assert.Eventually(
-		t,
-		func() bool {
-			tickets, err := ticketsRepo.FindAll(context.Background())
-			if err != nil {
-				return false
-			}
-
-			for _, t := range tickets {
-				if t.TicketID == ticket.TicketID {
-					return true
-				}
-			}
-
-			return false
-		},
-		10*time.Second,
-		100*time.Millisecond,
-	)
+```json
+{
+    "booking_id": "bde0bd8d-88df-4872-a099-d4cf5eb7b491"
 }
 ```
 
-{{endhint}}
+{{tip}}
 
-{{endhints}}
+Consider creating a separate database repository for the `Booking` entity.
+
+{{endtip}}

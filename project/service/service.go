@@ -39,6 +39,8 @@ func New(
 	eventBus := ticketsEvent.NewEventBus(publisher, watermillLogger)
 
 	ticketRepo := ticketsDB.NewTicketsRepository(dbConn)
+	showRepo := ticketsDB.NewShowsRepository(dbConn)
+	bookingRepo := ticketsDB.NewBookingRepository(dbConn)
 
 	eventHandler := ticketsEvent.NewEventHandler(
 		spreadsheetsAPI,
@@ -60,6 +62,8 @@ func New(
 	echoRouter := ticketsHttp.NewHttpRouter(
 		eventBus,
 		ticketRepo,
+		showRepo,
+		bookingRepo,
 	)
 
 	return Service{

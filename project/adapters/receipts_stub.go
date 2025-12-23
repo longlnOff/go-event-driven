@@ -17,6 +17,6 @@ func (s *ReceiptsServiceStub) IssueReceipt(
 ) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.IssuedReceipts[request.IdempotencyKey] = request
+	s.IssuedReceipts[request.TicketID] = request
 	return nil
 }

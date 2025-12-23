@@ -76,7 +76,7 @@ type TicketResponse struct {
 }
 
 func (h Handler) GetAllTickets(c echo.Context) error {
-	tickets, err := h.repo.FindAll(c.Request().Context())
+	tickets, err := h.ticketRepository.FindAll(c.Request().Context())
 	if err != nil {
 		return fmt.Errorf("failed to get tickets: %w", err)
 	}

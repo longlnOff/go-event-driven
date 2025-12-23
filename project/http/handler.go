@@ -8,10 +8,19 @@ import (
 )
 
 type Handler struct {
-	eventBus *cqrs.EventBus
-	repo     TicketsRepository
+	eventBus          *cqrs.EventBus
+	ticketRepository  TicketsRepository
+	showRepository    ShowsRepository
+	bookingRepository BookingRepository
 }
 
 type TicketsRepository interface {
 	FindAll(ctx context.Context) ([]ticketsEntity.Ticket, error)
+}
+type ShowsRepository interface {
+	AddShow(ctx context.Context, show ticketsEntity.Show) error
+}
+
+type BookingRepository interface {
+	AddBooking(ctx context.Context, booking ticketsEntity.Booking) error
 }
