@@ -9,6 +9,7 @@ import (
 	ticketsHttp "tickets/http"
 	ticketsMessage "tickets/message"
 	ticketsEvent "tickets/message/event"
+	ticketsOutbox "tickets/message/outbox"
 
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 	"github.com/ThreeDotsLabs/watermill"
@@ -42,6 +43,8 @@ func New(
 	showRepo := ticketsDB.NewShowsRepository(dbConn)
 	bookingRepo := ticketsDB.NewBookingRepository(dbConn)
 
+	postgresSubscriber := ticketsOutbox.NewPostgresSubscriber(dbConn, watermillLogger)
+
 	eventHandler := ticketsEvent.NewEventHandler(
 		spreadsheetsAPI,
 		receiptsService,
@@ -54,6 +57,8 @@ func New(
 		watermillLogger,
 	)
 	router := ticketsMessage.NewRouter(
+		postgresSubscriber,
+		publisher,
 		*eventProcessorConfig,
 		eventHandler,
 		watermillLogger,

@@ -1,21 +1,23 @@
 package message
 
 import (
-	ticketsEvent "tickets/message/event"
-
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/ThreeDotsLabs/watermill/message"
+	ticketsEvent "tickets/message/event"
+	ticketsOutbox "tickets/message/outbox"
 )
 
 func NewRouter(
+	postgresSubscriber message.Subscriber,
+	publisher message.Publisher,
 	eventProcessorConfig cqrs.EventProcessorConfig,
 	eventHandler *ticketsEvent.Handler,
 	watermillLogger watermill.LoggerAdapter,
 ) *message.Router {
 	router := message.NewDefaultRouter(watermillLogger)
 	AddMiddleWare(router, watermillLogger)
-
+	ticketsOutbox.AddForwarderHandler(postgresSubscriber, publisher, router, watermillLogger)
 	eventProcessor, err := cqrs.NewEventProcessorWithConfig(
 		router,
 		eventProcessorConfig,
