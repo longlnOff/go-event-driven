@@ -22,7 +22,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer db.Close()
+	defer func() {
+		err := db.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	apiClients, err := clients.NewClients(
 		os.Getenv("GATEWAY_ADDR"),
