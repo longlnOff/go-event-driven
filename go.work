@@ -21,5 +21,6 @@ use (
 	./11-outbox/05-publishing-events-in-transaction
 	./11-outbox/06-subscribing-to-sql
 	./11-outbox/07-forwarding-with-outbox
+	./12-cqrs-commands/01-command-vs-event
 	./project
 )

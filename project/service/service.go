@@ -8,6 +8,7 @@ import (
 	ticketsDB "tickets/db"
 	ticketsHttp "tickets/http"
 	ticketsMessage "tickets/message"
+	ticketsCommand "tickets/message/command"
 	ticketsEvent "tickets/message/event"
 	ticketsOutbox "tickets/message/outbox"
 
@@ -27,15 +28,20 @@ type Service struct {
 	messageRouter *message.Router
 }
 
+type ReceiptService interface {
+	ticketsEvent.ReceiptsService
+	ticketsCommand.ReceiptsService
+}
+
 func New(
 	dbConn *sqlx.DB,
 	spreadsheetsAPI ticketsEvent.SpreadsheetsAPI,
-	receiptsService ticketsEvent.ReceiptsService,
+	receiptsService ReceiptService,
 	fileService ticketsEvent.FilesService,
+	paymentService ticketsCommand.PaymentsService,
 	deadNationService ticketsEvent.DeadNationService,
 	rdb redis.UniversalClient,
 ) Service {
-
 	watermillLogger := watermill.NewSlogLogger(log.FromContext(context.Background()))
 	publisher := ticketsMessage.NewRedisPublisher(rdb, watermillLogger)
 	eventBus := ticketsEvent.NewEventBus(publisher, watermillLogger)
@@ -43,6 +49,17 @@ func New(
 	ticketRepo := ticketsDB.NewTicketsRepository(dbConn)
 	showRepo := ticketsDB.NewShowsRepository(dbConn)
 	bookingRepo := ticketsDB.NewBookingRepository(dbConn)
+
+	commandBus := ticketsCommand.NewCommandBus(publisher, watermillLogger)
+	commandProcessorConfig := ticketsCommand.NewCommandProcessorConfig(
+		rdb,
+		watermillLogger,
+	)
+	commandHandler := ticketsCommand.NewCommandHandler(
+		receiptsService,
+		paymentService,
+		eventBus,
+	)
 
 	postgresSubscriber := ticketsOutbox.NewPostgresSubscriber(dbConn, watermillLogger)
 
@@ -63,12 +80,15 @@ func New(
 		postgresSubscriber,
 		publisher,
 		*eventProcessorConfig,
+		*commandProcessorConfig,
+		*commandHandler,
 		eventHandler,
 		watermillLogger,
 	)
 
 	echoRouter := ticketsHttp.NewHttpRouter(
 		eventBus,
+		commandBus,
 		ticketRepo,
 		showRepo,
 		bookingRepo,

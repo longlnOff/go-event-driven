@@ -1,4 +1,4 @@
-package event
+package command
 
 import (
 	"github.com/ThreeDotsLabs/watermill"
@@ -6,18 +6,18 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 )
 
-func NewEventBus(
+func NewCommandBus(
 	pub message.Publisher,
 	logger watermill.LoggerAdapter,
-) *cqrs.EventBus {
-	eventBus, err := cqrs.NewEventBusWithConfig(
+) *cqrs.CommandBus {
+	eventBus, err := cqrs.NewCommandBusWithConfig(
 		pub,
-		cqrs.EventBusConfig{
-			GeneratePublishTopic: func(params cqrs.GenerateEventPublishTopicParams) (string, error) {
-				return "events." + params.EventName, nil
+		cqrs.CommandBusConfig{
+			GeneratePublishTopic: func(params cqrs.CommandBusGeneratePublishTopicParams) (string, error) {
+				return "commands." + params.CommandName, nil
 			},
-			Logger:    logger,
 			Marshaler: jsonMarshaler,
+			Logger:    logger,
 		},
 	)
 	if err != nil {

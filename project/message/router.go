@@ -1,6 +1,7 @@
 package message
 
 import (
+	ticketsCommand "tickets/message/command"
 	ticketsEvent "tickets/message/event"
 	ticketsOutbox "tickets/message/outbox"
 
@@ -13,6 +14,8 @@ func NewRouter(
 	postgresSubscriber message.Subscriber,
 	publisher message.Publisher,
 	eventProcessorConfig cqrs.EventProcessorConfig,
+	commandProcessorConfig cqrs.CommandProcessorConfig,
+	commandHandler ticketsCommand.Handler,
 	eventHandler *ticketsEvent.Handler,
 	watermillLogger watermill.LoggerAdapter,
 ) *message.Router {
@@ -22,6 +25,10 @@ func NewRouter(
 	eventProcessor, err := cqrs.NewEventProcessorWithConfig(
 		router,
 		eventProcessorConfig,
+	)
+	commandProcessor, err := cqrs.NewCommandProcessorWithConfig(
+		router,
+		commandProcessorConfig,
 	)
 	if err != nil {
 		panic(err)
@@ -55,6 +62,16 @@ func NewRouter(
 		cqrs.NewEventHandler(
 			"CallDeadNation",
 			eventHandler.CallDeadNation,
+		),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	err = commandProcessor.AddHandlers(
+		cqrs.NewCommandHandler(
+			"RefundReceipt",
+			commandHandler.RefundReceipts,
 		),
 	)
 	if err != nil {

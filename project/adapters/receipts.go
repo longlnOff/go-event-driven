@@ -23,6 +23,28 @@ func NewReceiptsServiceClient(clients *clients.Clients) *ReceiptsServiceClient {
 	return &ReceiptsServiceClient{clients: clients}
 }
 
+func (c ReceiptsServiceClient) RefundReceipt(ctx context.Context, command ticketsEntity.RefundTicket) error {
+	resp, err := c.clients.Receipts.PutVoidReceiptWithResponse(ctx, receipts.VoidReceiptRequest{
+		TicketId:     command.TicketID,
+		Reason:       "customer requested refund",
+		IdempotentId: &command.Header.IdempotencyKey,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to refund receipt: %w", err)
+	}
+
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		// receipt already exists
+		return nil
+	case http.StatusCreated:
+		// receipt was created
+		return nil
+	default:
+		return fmt.Errorf("unexpected status code for refund receipt: %d", resp.StatusCode())
+	}
+}
+
 func (c ReceiptsServiceClient) IssueReceipt(ctx context.Context, request ticketsEntity.IssueReceiptRequest) error {
 	resp, err := c.clients.Receipts.PutReceiptsWithResponse(ctx, receipts.CreateReceipt{
 		TicketId: request.TicketID,

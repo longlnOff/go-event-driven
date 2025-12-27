@@ -47,6 +47,7 @@ func main() {
 	receiptsService := ticketsAdapter.NewReceiptsServiceClient(apiClients)
 	fileService := ticketsAdapter.NewFileServiceClient(apiClients)
 	deadNationService := ticketsAdapter.NewDeadNationServiceClient(apiClients)
+	paymentsService := ticketsAdapter.NewPaymentsServiceClient(apiClients)
 
 	rdb := ticketsMessage.NewRedisClient(os.Getenv("REDIS_ADDR"))
 
@@ -55,6 +56,7 @@ func main() {
 		spreadsheetsAPI,
 		receiptsService,
 		fileService,
+		paymentsService,
 		deadNationService,
 		rdb,
 	).Run(ctx)
