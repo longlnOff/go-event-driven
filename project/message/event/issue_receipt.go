@@ -19,10 +19,22 @@ func (h Handler) IssueReceipt(
 		Price:          event.Price,
 		IdempotencyKey: event.Header.IdempotencyKey,
 	}
-	err := h.receiptsService.IssueReceipt(
+	TicketReceiptIssued, err := h.receiptsService.IssueReceipt(
 		ctx,
 		request,
 	)
+	if err != nil {
+		return err
+	}
+	err = h.eventBus.Publish(ctx, ticketsEntity.TicketReceiptIssued{
+		Header:        ticketsEntity.NewMessageHeaderWithIdempotencyKey(event.Header.IdempotencyKey),
+		TicketID:      event.TicketID,
+		ReceiptNumber: TicketReceiptIssued.ReceiptNumber,
+		IssuedAt:      TicketReceiptIssued.IssuedAt,
+	})
+	if err != nil {
+		return err
+	}
 
 	return err
 }

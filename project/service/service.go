@@ -76,12 +76,14 @@ func New(
 		rdb,
 		watermillLogger,
 	)
+	opsReadModel := ticketsDB.NewOpsBookingReadModel(dbConn)
 	router := ticketsMessage.NewRouter(
 		postgresSubscriber,
 		publisher,
 		*eventProcessorConfig,
 		*commandProcessorConfig,
 		*commandHandler,
+		opsReadModel,
 		eventHandler,
 		watermillLogger,
 	)
@@ -92,6 +94,7 @@ func New(
 		ticketRepo,
 		showRepo,
 		bookingRepo,
+		opsReadModel,
 	)
 
 	return Service{

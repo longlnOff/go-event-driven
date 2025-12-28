@@ -23,7 +23,10 @@ func NewReceiptsServiceClient(clients *clients.Clients) *ReceiptsServiceClient {
 	return &ReceiptsServiceClient{clients: clients}
 }
 
-func (c ReceiptsServiceClient) RefundReceipt(ctx context.Context, command ticketsEntity.RefundTicket) error {
+func (c ReceiptsServiceClient) RefundReceipt(
+	ctx context.Context,
+	command ticketsEntity.RefundTicket,
+) error {
 	resp, err := c.clients.Receipts.PutVoidReceiptWithResponse(ctx, receipts.VoidReceiptRequest{
 		TicketId:     command.TicketID,
 		Reason:       "customer requested refund",
@@ -45,7 +48,10 @@ func (c ReceiptsServiceClient) RefundReceipt(ctx context.Context, command ticket
 	}
 }
 
-func (c ReceiptsServiceClient) IssueReceipt(ctx context.Context, request ticketsEntity.IssueReceiptRequest) error {
+func (c ReceiptsServiceClient) IssueReceipt(
+	ctx context.Context,
+	request ticketsEntity.IssueReceiptRequest,
+) (ticketsEntity.IssueReceiptResponse, error) {
 	resp, err := c.clients.Receipts.PutReceiptsWithResponse(ctx, receipts.CreateReceipt{
 		TicketId: request.TicketID,
 		Price: receipts.Money{
@@ -54,18 +60,25 @@ func (c ReceiptsServiceClient) IssueReceipt(ctx context.Context, request tickets
 		},
 		IdempotencyKey: &request.IdempotencyKey,
 	})
+
 	if err != nil {
-		return fmt.Errorf("failed to post receipt: %w", err)
+		return ticketsEntity.IssueReceiptResponse{}, fmt.Errorf("failed to issue receipt: %w", err)
 	}
 
 	switch resp.StatusCode() {
 	case http.StatusOK:
 		// receipt already exists
-		return nil
+		return ticketsEntity.IssueReceiptResponse{
+			ReceiptNumber: resp.JSON200.Number,
+			IssuedAt:      resp.JSON200.IssuedAt,
+		}, nil
 	case http.StatusCreated:
 		// receipt was created
-		return nil
+		return ticketsEntity.IssueReceiptResponse{
+			ReceiptNumber: resp.JSON201.Number,
+			IssuedAt:      resp.JSON201.IssuedAt,
+		}, nil
 	default:
-		return fmt.Errorf("unexpected status code for POST receipts-api/receipts: %d", resp.StatusCode())
+		return ticketsEntity.IssueReceiptResponse{}, fmt.Errorf("unexpected status code for POST receipts-api/receipts: %d", resp.StatusCode())
 	}
 }

@@ -1,6 +1,7 @@
 package message
 
 import (
+	ticketsDB "tickets/db"
 	ticketsCommand "tickets/message/command"
 	ticketsEvent "tickets/message/event"
 	ticketsOutbox "tickets/message/outbox"
@@ -16,6 +17,7 @@ func NewRouter(
 	eventProcessorConfig cqrs.EventProcessorConfig,
 	commandProcessorConfig cqrs.CommandProcessorConfig,
 	commandHandler ticketsCommand.Handler,
+	opsReadModel ticketsDB.OpsBookingReadModel,
 	eventHandler *ticketsEvent.Handler,
 	watermillLogger watermill.LoggerAdapter,
 ) *message.Router {
@@ -62,6 +64,26 @@ func NewRouter(
 		cqrs.NewEventHandler(
 			"CallDeadNation",
 			eventHandler.CallDeadNation,
+		),
+		cqrs.NewEventHandler(
+			"ops_read_model.OnBookingMade",
+			opsReadModel.OnBookingMade,
+		),
+		cqrs.NewEventHandler(
+			"ops_read_model.OnTicketBookingConfirmed",
+			opsReadModel.OnTicketBookingConfirmed,
+		),
+		cqrs.NewEventHandler(
+			"ops_read_model.OnTicketRefunded",
+			opsReadModel.OnTicketRefunded,
+		),
+		cqrs.NewEventHandler(
+			"ops_read_model.OnTicketPrinted",
+			opsReadModel.OnTicketPrinted,
+		),
+		cqrs.NewEventHandler(
+			"ops_read_model.OnTicketReceiptIssued",
+			opsReadModel.OnTicketReceiptIssued,
 		),
 	)
 	if err != nil {

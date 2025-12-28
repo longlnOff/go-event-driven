@@ -10,6 +10,7 @@ import (
 )
 
 type TicketStatusRequest struct {
+	BookingId     string              `json:"booking_id"`
 	TicketID      string              `json:"ticket_id"`
 	Status        string              `json:"status"`
 	Price         ticketsEntity.Money `json:"price"`
@@ -36,6 +37,7 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 		if ticket.Status == "confirmed" {
 			event := ticketsEntity.TicketBookingConfirmed{
 				Header:        ticketsEntity.NewMessageHeaderWithIdempotencyKey(key),
+				BookingID:     ticket.BookingId,
 				TicketID:      ticket.TicketID,
 				CustomerEmail: ticket.CustomerEmail,
 				Price:         ticket.Price,

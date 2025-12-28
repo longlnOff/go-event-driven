@@ -26,6 +26,16 @@ func (h Handler) RefundReceipts(
 			RefundReason:   "refund",
 		},
 	)
+	if err != nil {
+		return err
+	}
+	err = h.eventBus.Publish(
+		ctx,
+		ticketsEntity.TicketRefunded{
+			Header:   ticketsEntity.NewMessageHeaderWithIdempotencyKey(command.Header.IdempotencyKey),
+			TicketID: command.TicketID,
+		},
+	)
 
 	return err
 }
