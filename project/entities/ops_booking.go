@@ -20,8 +20,8 @@ type OpsTicket struct {
 	PriceCurrency string `json:"price_currency"` // from TicketBookingConfirmed event
 	CustomerEmail string `json:"customer_email"` // from TicketBookingConfirmed event
 
-	// Status should be set to "confirmed" or "refunded"
-	Status string `json:"status"` // set to "confirmed" by TicketBookingConfirmed, "refunded" by TicketRefunded
+	ConfirmedAt time.Time `json:"confirmed_at"` // from TicketBookingConfirmed event
+	RefundedAt  time.Time `json:"refunded_at"`  // from TicketRefunded event
 
 	PrintedAt       time.Time `json:"printed_at"`        // from TicketPrinted event
 	PrintedFileName string    `json:"printed_file_name"` // from TicketPrinted event
