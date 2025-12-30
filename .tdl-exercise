@@ -1,4 +1,4 @@
-exercise_id = "8b3769ea-0f8d-41b2-b618-7c9fef33d0c7"
-directory = "14-message-ordering/05-independent-updates"
+exercise_id = "392ba2d4-3bde-489c-849a-74d5380e527f"
+directory = "project"
 is_text_only = false
-is_optional = false
+is_optional = true

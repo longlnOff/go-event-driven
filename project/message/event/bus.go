@@ -14,7 +14,7 @@ func NewEventBus(
 		pub,
 		cqrs.EventBusConfig{
 			GeneratePublishTopic: func(params cqrs.GenerateEventPublishTopicParams) (string, error) {
-				return "events." + params.EventName, nil
+				return "events", nil
 			},
 			Logger:    logger,
 			Marshaler: jsonMarshaler,

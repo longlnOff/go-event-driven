@@ -14,6 +14,7 @@ import (
 
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 	"github.com/ThreeDotsLabs/watermill"
+	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
@@ -45,6 +46,25 @@ func New(
 	watermillLogger := watermill.NewSlogLogger(log.FromContext(context.Background()))
 	publisher := ticketsMessage.NewRedisPublisher(rdb, watermillLogger)
 	eventBus := ticketsEvent.NewEventBus(publisher, watermillLogger)
+	redisSubscriber, err := redisstream.NewSubscriber(
+		redisstream.SubscriberConfig{
+			Client:        rdb,
+			ConsumerGroup: "events_splitter",
+		}, watermillLogger,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	redisSubscriberStore, err := redisstream.NewSubscriber(
+		redisstream.SubscriberConfig{
+			Client:        rdb,
+			ConsumerGroup: "events_store",
+		}, watermillLogger,
+	)
+	if err != nil {
+		panic(err)
+	}
 
 	ticketRepo := ticketsDB.NewTicketsRepository(dbConn)
 	showRepo := ticketsDB.NewShowsRepository(dbConn)
@@ -78,6 +98,8 @@ func New(
 	)
 	opsReadModel := ticketsDB.NewOpsBookingReadModel(dbConn)
 	router := ticketsMessage.NewRouter(
+		redisSubscriberStore,
+		redisSubscriber,
 		postgresSubscriber,
 		publisher,
 		*eventProcessorConfig,
@@ -109,22 +131,28 @@ func (s Service) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize database schema: %w", err)
 	}
 	errGroup, ctx := errgroup.WithContext(ctx)
-	errGroup.Go(func() error {
-		return s.messageRouter.Run(ctx)
-	})
-	errGroup.Go(func() error {
-		<-s.messageRouter.Running()
+	errGroup.Go(
+		func() error {
+			return s.messageRouter.Run(ctx)
+		},
+	)
+	errGroup.Go(
+		func() error {
+			<-s.messageRouter.Running()
 
-		err := s.echoRouter.Start(":8080")
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
-	})
-	errGroup.Go(func() error {
-		<-ctx.Done()
-		return s.echoRouter.Shutdown(context.Background())
-	})
+			err := s.echoRouter.Start(":8080")
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return err
+			}
+			return nil
+		},
+	)
+	errGroup.Go(
+		func() error {
+			<-ctx.Done()
+			return s.echoRouter.Shutdown(context.Background())
+		},
+	)
 
 	return errGroup.Wait()
 }

@@ -1,7 +1,9 @@
 package message
 
 import (
+	"fmt"
 	ticketsDB "tickets/db"
+	ticketsEntity "tickets/entities"
 	ticketsCommand "tickets/message/command"
 	ticketsEvent "tickets/message/event"
 	ticketsOutbox "tickets/message/outbox"
@@ -12,8 +14,10 @@ import (
 )
 
 func NewRouter(
+	redisSubscriberStore message.Subscriber,
+	redisSubscriber message.Subscriber,
 	postgresSubscriber message.Subscriber,
-	publisher message.Publisher,
+	redisPublisher message.Publisher,
 	eventProcessorConfig cqrs.EventProcessorConfig,
 	commandProcessorConfig cqrs.CommandProcessorConfig,
 	commandHandler ticketsCommand.Handler,
@@ -23,7 +27,7 @@ func NewRouter(
 ) *message.Router {
 	router := message.NewDefaultRouter(watermillLogger)
 	AddMiddleWare(router, watermillLogger)
-	ticketsOutbox.AddForwarderHandler(postgresSubscriber, publisher, router, watermillLogger)
+	ticketsOutbox.AddForwarderHandler(postgresSubscriber, redisPublisher, router, watermillLogger)
 	eventProcessor, err := cqrs.NewEventProcessorWithConfig(
 		router,
 		eventProcessorConfig,
@@ -35,6 +39,38 @@ func NewRouter(
 	if err != nil {
 		panic(err)
 	}
+
+	router.AddConsumerHandler(
+		"events_splitter",
+		"events",
+		redisSubscriber,
+		func(msg *message.Message) error {
+			eventName := eventProcessorConfig.Marshaler.NameFromMessage(msg)
+			if eventName == "" {
+				return fmt.Errorf("cannot get event name from message")
+			}
+			return redisPublisher.Publish("events."+eventName, msg)
+		},
+	)
+
+	router.AddConsumerHandler(
+		"events_store",
+		"events",
+		redisSubscriberStore,
+		func(msg *message.Message) error {
+			var event ticketsEntity.Event
+			if err := eventProcessorConfig.Marshaler.Unmarshal(msg, &event); err != nil {
+				return fmt.Errorf("cannot unmarshal event: %w", err)
+			}
+
+			eventName := eventProcessorConfig.Marshaler.NameFromMessage(msg)
+			if eventName == "" {
+				return fmt.Errorf("cannot get event name from message")
+			}
+
+			return eventHandler.StoreEvent(msg.Context(), event, eventName, msg.Payload)
+		},
+	)
 
 	err = eventProcessor.AddHandlers(
 		cqrs.NewEventHandler(

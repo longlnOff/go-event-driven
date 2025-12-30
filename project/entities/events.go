@@ -73,3 +73,8 @@ type TicketRefunded struct {
 
 	TicketID string `json:"ticket_id"`
 }
+
+// We just need to unmarshal the event header; the rest is stored as is.
+type Event struct {
+	Header MessageHeader `json:"header"`
+}

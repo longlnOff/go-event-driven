@@ -1,88 +1,84 @@
-# Handling out-of-order `TicketBookingConfirmed` and `TicketBookingCanceled` events
+# Store events in Data Lake
 
-We can't guess how you implemented removing tickets from the `tickets` table.
-However, there is a chance that your code doesn't assume that 
-`TicketBookingConfirmed` and `TicketBookingCanceled` events can arrive out of order.
-
-In our previous example solution, we were using a query like this one:
-
-```sql
-DELETE FROM tickets WHERE ticket_id = $1
-```
-
-It will execute successfully even if there is no row for the ticket in the table yet.
-**However, some tickets may be not removed if the `TicketBookingCanceled` event is 
-processed before `TicketBookingConfirmed` because there is nothing to remove.**
-
-In theory, we could check if there is a row for the ticket in the table before removing it, and return an error if there isn't.
-However, there is one downside: Our repository will be no longer be {{exerciseLink "idempotent" "10-at-least-once-delivery" "05-idempotent-event-handlers"}}.
-**If we receive the `TicketBookingCanceled` event again, it will fail because there will be no row for the ticket in the table.**
-
-One of the solutions here is to use soft delete.
-We need to add a `deleted_at` column to the `tickets` table and exclude those rows from the result when querying for tickets.
+Now, when we have all of our events on a single topic, we can store them in the data lake.
+For the purposes of the training, we will use PostgreSQL as our data lake.
 
 {{tip}}
 
-A repository pattern is pretty useful in such cases — you have one central place where you can change your querying logic.
-When you are not querying your data in multiple places in your codebase,
-you don't need to be afraid that you will forget to update your logic somewhere.
-
-Bonus points for writing {{exerciseLink "integration tests" "10-at-least-once-delivery" "07-project-testing-idempotency"}} for that logic!
+PostgreSQL is not ideal for very large scale data lakes (like terabytes of data).
+Large datasets make PostgreSQL too expensive for storing all events.
 
 {{endtip}}
 
-When `TicketBookingCanceled` arrives before `TicketBookingConfirmed` (in other words, when no ticket was stored in `tickets` yet), 
-we will return an error. `TicketBookingCanceled` will be redelivered after a while, when the ticket should already exist.
-Upon redelivery of `TicketBookingCanceled`, we will just ignore the update.
-In other words, our repository will be idempotent and resilient to out-of-order events.
+You can think about a data lake as being like a big {{exerciseLink "read model" "13-read-models" "01-read-models"}} containing all events in raw form.
 
 ## Exercise
 
 Exercise path: ./project
 
-1. Add a `deleted_at` column to the `tickets` table.
-2. Set `deleted_at` to the current timestamp when the `TicketBookingCanceled` event is processed.
-3. Update your querying logic, so tickets with non-null `deleted_at` aren't returned.
+1. Create a new database table called `events`.
 
-4. We will simulate sending `POST /tickets-status` with an out-of-order status update where you receive cancellation information for a ticket not yet booked.
-**Check if the booking exists in `tickets` and return an error in your event handler when `deleted_at` is not set. This prevents losing the event.**
-This will nack the message for redelivery after `TicketBookingConfirmed` is processed.
+**It's important to use exactly this schema:**
+
+```sql
+CREATE TABLE IF NOT EXISTS events (
+    event_id UUID PRIMARY KEY,
+    published_at TIMESTAMP NOT NULL,
+    event_name VARCHAR(255) NOT NULL,
+    event_payload JSONB NOT NULL
+);
+```
+
+2. Add {{exerciseLink "a new message handler" "04-router" "01-handlers"}} that stores all events in the data lake.
+
+It should listen to the `events` topic.
 
 {{tip}}
 
-Ensure {{exerciseLink "your retry middleware" "07-errors" "02-project-temporary-errors"}} doesn't redeliver messages too slowly.
-Messages redelivered after too long may exceed test timeout.
-
-In the end, canceled tickets should not be returned from your `GET /tickets` endpoint.
+Don't forget to use a separate {{exerciseLink "consumer group" "03-message-broker" "05-consumer-groups"}} for this handler!
 
 {{endtip}}
 
+3. Store all events in the `events` table.
+
+Get `event_id` and `published_at` from the event header. You should unmarshal it from the event's payload.
+Extract `event_name` from the message using the CQRS marshaler (`cqrs.JSONMarshaler`).
+
+`event_payload` should contain the raw event payload of the message (`msg.Payload`).
+
+An event handler won't work here because we need to store our events in raw form.
+
+Don't forget about {{exerciseLink "at-least-once delivery" "10-at-least-once-delivery" "06-project-handling-re-delivery"}}!
+You should deduplicate potential redelivered events based on the `event_id`.
 
 {{hints}}
 
 {{hint 1}}
-
-It's example code of how soft delete with ensuring that booking exists can be implemented:
+To store events in a data lake, extract `event_id` and `published_at` from the event header.
+Unmarshal the event to a struct with just a header field. The rest of the payload will be ignored:
 
 ```go
-func (t TicketsRepository) Remove(ctx context.Context, ticketID string) error {
-	res, err := t.db.ExecContext(
-		ctx,
-		`UPDATE tickets SET deleted_at = now() WHERE ticket_id = $1`,
-		ticketID,
-	)
-	if err != nil {
-		return fmt.Errorf("could not remove ticket: %w", err)
-	}
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("could get rows affected: %w", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("ticket with id %s not found", ticketID)
-	}
+// We just need to unmarshal the event header; the rest is stored as is.
+type Event struct {
+	Header entities.MessageHeader `json:"header"`
+}
 
-	return nil
+var event Event
+if err := eventProcessorConfig.Marshaler.Unmarshal(msg, &event); err != nil {
+	return fmt.Errorf("cannot unmarshal event: %w", err)
+}
+```
+
+{{endhint}}
+
+{{hint 2}}
+
+As in previous exercises, you can extract the event name from a message by using the CQRS marshaler:
+
+```go
+eventName := eventProcessorConfig.Marshaler.NameFromMessage(msg)
+if eventName == "" {
+	return fmt.Errorf("cannot get event name from message")
 }
 ```
 

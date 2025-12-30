@@ -12,7 +12,10 @@ type SpreadsheetsAPI interface {
 }
 
 type ReceiptsService interface {
-	IssueReceipt(ctx context.Context, request ticketsEntity.IssueReceiptRequest) (ticketsEntity.IssueReceiptResponse, error)
+	IssueReceipt(
+		ctx context.Context,
+		request ticketsEntity.IssueReceiptRequest,
+	) (ticketsEntity.IssueReceiptResponse, error)
 }
 
 type FilesService interface {
@@ -33,6 +36,10 @@ type ShowsRepository interface {
 	ShowByID(ctx context.Context, showID string) (ticketsEntity.Show, error)
 }
 
+type EventsRepository interface {
+	SaveEvent(ctx context.Context, event ticketsEntity.Event, eventName string, payload []byte) error
+}
+
 type Handler struct {
 	spreadsheetsAPI   SpreadsheetsAPI
 	receiptsService   ReceiptsService
@@ -40,6 +47,7 @@ type Handler struct {
 	deadNationService DeadNationService
 	ticketRepository  TicketsRepository
 	showRepository    ShowsRepository
+	eventRepository   EventsRepository
 	eventBus          *cqrs.EventBus
 }
 
@@ -50,6 +58,7 @@ func NewEventHandler(
 	deadNationService DeadNationService,
 	ticketRepository TicketsRepository,
 	showRepository ShowsRepository,
+	eventRepository EventsRepository,
 	eventBus *cqrs.EventBus,
 ) *Handler {
 	if spreadsheetsAPI == nil {
@@ -70,6 +79,9 @@ func NewEventHandler(
 	if showRepository == nil {
 		panic("missing showRepository")
 	}
+	if eventRepository == nil {
+		panic("missing eventRepository")
+	}
 	if eventBus == nil {
 		panic("missing eventBus")
 	}
@@ -80,6 +92,7 @@ func NewEventHandler(
 		deadNationService: deadNationService,
 		ticketRepository:  ticketRepository,
 		showRepository:    showRepository,
+		eventRepository:   eventRepository,
 		eventBus:          eventBus,
 	}
 }

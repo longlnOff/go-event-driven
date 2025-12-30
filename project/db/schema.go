@@ -7,7 +7,8 @@ import (
 )
 
 func InitializeDatabaseSchema(db *sqlx.DB) error {
-	_, err := db.Exec(`
+	_, err := db.Exec(
+		`
 		CREATE TABLE IF NOT EXISTS tickets (
 			ticket_id UUID PRIMARY KEY,
 			price_amount NUMERIC(10, 2) NOT NULL,
@@ -15,12 +16,14 @@ func InitializeDatabaseSchema(db *sqlx.DB) error {
 			customer_email VARCHAR(255) NOT NULL,
 		    deleted_at TIMESTAMP
 		);
-	`)
+	`,
+	)
 	if err != nil {
 		return fmt.Errorf("could not create table tickets: %w", err)
 	}
 
-	_, err = db.Exec(`
+	_, err = db.Exec(
+		`
 		CREATE TABLE IF NOT EXISTS shows (
 			show_id UUID PRIMARY KEY,
 			dead_nation_id UUID NOT NULL,
@@ -30,12 +33,14 @@ func InitializeDatabaseSchema(db *sqlx.DB) error {
 			venue VARCHAR(255) NOT NULL,
 			UNIQUE (dead_nation_id)
 		);
-	`)
+	`,
+	)
 	if err != nil {
 		return fmt.Errorf("could not create table shows: %w", err)
 	}
 
-	_, err = db.Exec(`
+	_, err = db.Exec(
+		`
 		CREATE TABLE IF NOT EXISTS bookings (
 			booking_id UUID PRIMARY KEY,
 			show_id UUID NOT NULL,
@@ -43,19 +48,39 @@ func InitializeDatabaseSchema(db *sqlx.DB) error {
 			customer_email VARCHAR(255) NOT NULL,
 			FOREIGN KEY (show_id) REFERENCES shows(show_id)
 		);
-	`)
+	`,
+	)
 	if err != nil {
 		return fmt.Errorf("could not create table shows: %w", err)
 	}
 
-	_, err = db.Exec(`
+	_, err = db.Exec(
+		`
 		CREATE TABLE IF NOT EXISTS read_model_ops_bookings (
 			booking_id UUID PRIMARY KEY,
 			payload JSONB NOT NULL
 		);
-	`)
+	`,
+	)
+
 	if err != nil {
 		return fmt.Errorf("could not create table read_model_ops_bookings: %w", err)
 	}
+
+	_, err = db.Exec(
+		`
+		CREATE TABLE IF NOT EXISTS events (
+			event_id UUID PRIMARY KEY,
+			published_at TIMESTAMP NOT NULL,
+			event_name VARCHAR(255) NOT NULL,
+			event_payload JSONB NOT NULL
+		);
+	`,
+	)
+
+	if err != nil {
+		return fmt.Errorf("could not create table events: %w", err)
+	}
+
 	return nil
 }
