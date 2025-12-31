@@ -69,6 +69,7 @@ func New(
 	ticketRepo := ticketsDB.NewTicketsRepository(dbConn)
 	showRepo := ticketsDB.NewShowsRepository(dbConn)
 	bookingRepo := ticketsDB.NewBookingRepository(dbConn)
+	eventRepo := ticketsDB.NewEventsRepository(dbConn)
 
 	commandBus := ticketsCommand.NewCommandBus(publisher, watermillLogger)
 	commandProcessorConfig := ticketsCommand.NewCommandProcessorConfig(
@@ -90,6 +91,7 @@ func New(
 		deadNationService,
 		ticketRepo,
 		showRepo,
+		eventRepo,
 		eventBus,
 	)
 	eventProcessorConfig := ticketsEvent.NewEventProcessorConfig(

@@ -2,11 +2,11 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
-
 	"github.com/jmoiron/sqlx"
-
 	ticketsEntity "tickets/entities"
+	"github.com/lib/pq"
 )
 
 type EventsRepository struct {
@@ -21,45 +21,36 @@ func NewEventsRepository(db *sqlx.DB) EventsRepository {
 	return EventsRepository{db: db}
 }
 
-func (s EventsRepository) SaveEvent(ctx context.Context, event ticketsEntity.Event, eventName string, payload []byte) error
-
-	_, err := s.db.NamedExecContext(
+func (s EventsRepository) SaveEvent(
+	ctx context.Context,
+	event ticketsEntity.Event,
+	eventName string,
+	payload []byte,
+) error {
+	_, err := s.db.ExecContext(
 		ctx,
 		`
-       INSERT INTO
-           shows (
-                  show_id,
-                  dead_nation_id,
-                  number_of_tickets,
-                  start_time,
-                  title,
-                  venue
-           )
-       VALUES
-           (
-             :show_id, 
-             :dead_nation_id, 
-             :number_of_tickets, 
-             :start_time,
-             :title,
-             :venue
-          )
-       ON CONFLICT DO NOTHING`,
-		show,
+        INSERT INTO events (
+            event_id,
+            published_at,
+            event_name,
+            event_payload
+        )
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT DO NOTHING`,
+		event.Header.ID,
+		event.Header.PublishedAt,
+		eventName,
+		payload,
 	)
-	if err != nil {
-		return fmt.Errorf("could not save show: %w", err)
+	var postgresError *pq.Error
+	if errors.As(err, &postgresError) && postgresError.Code.Name() == "unique_violation" {
+		// handling re-delivery
+		return nil
 	}
-
+	if err != nil {
+		return fmt.Errorf("could not store %s event in data lake: %w", event.Header.ID, err)
+	}
 	return nil
-}
 
-func (s EventsRepository) ShowByID(ctx context.Context, showID string) (ticketsEntity.Show, error) {
-	var show ticketsEntity.Show
-	err := s.db.GetContext(ctx, &show, `SELECT * FROM shows WHERE show_id = $1`, showID)
-	if err != nil {
-		return ticketsEntity.Show{}, err
-	}
-
-	return show, nil
 }
