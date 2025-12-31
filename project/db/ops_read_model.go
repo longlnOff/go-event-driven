@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
+	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 
@@ -16,15 +17,16 @@ import (
 )
 
 type OpsBookingReadModel struct {
-	db *sqlx.DB
+	db       *sqlx.DB
+	eventBus *cqrs.EventBus
 }
 
-func NewOpsBookingReadModel(db *sqlx.DB) OpsBookingReadModel {
+func NewOpsBookingReadModel(db *sqlx.DB, eventBus *cqrs.EventBus) OpsBookingReadModel {
 	if db == nil {
 		panic("db is nil")
 	}
 
-	return OpsBookingReadModel{db: db}
+	return OpsBookingReadModel{db: db, eventBus: eventBus}
 }
 
 func (r OpsBookingReadModel) AllBookingsByDate(date string) ([]ticketsEntity.OpsBooking, error) {
@@ -96,22 +98,27 @@ func (r OpsBookingReadModel) AllBookings() ([]ticketsEntity.OpsBooking, error) {
 	return result, nil
 }
 
-func (r OpsBookingReadModel) ReservationReadModel(ctx context.Context, bookingID string) (ticketsEntity.OpsBooking, error) {
+func (r OpsBookingReadModel) ReservationReadModel(
+	ctx context.Context,
+	bookingID string,
+) (ticketsEntity.OpsBooking, error) {
 	return r.findReadModelByBookingID(ctx, bookingID, r.db)
 }
 
-func (r OpsBookingReadModel) OnBookingMade(ctx context.Context, bookingMade *ticketsEntity.BookingMade) error {
+func (r OpsBookingReadModel) OnBookingMade(ctx context.Context, bookingMade *ticketsEntity.BookingMade_v1) error {
 	// this is the first event that should arrive, so we create the read model
 	bookingID, err := uuid.Parse(bookingMade.BookingID)
 	if err != nil {
 		return err
 	}
-	err = r.createReadModel(ctx, ticketsEntity.OpsBooking{
-		BookingID:  bookingID,
-		Tickets:    nil,
-		LastUpdate: time.Now(),
-		BookedAt:   bookingMade.Header.PublishedAt,
-	})
+	err = r.createReadModel(
+		ctx, ticketsEntity.OpsBooking{
+			BookingID:  bookingID,
+			Tickets:    nil,
+			LastUpdate: time.Now(),
+			BookedAt:   bookingMade.Header.PublishedAt,
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("could not create read model: %w", err)
 	}
@@ -119,7 +126,10 @@ func (r OpsBookingReadModel) OnBookingMade(ctx context.Context, bookingMade *tic
 	return nil
 }
 
-func (r OpsBookingReadModel) OnTicketBookingConfirmed(ctx context.Context, event *ticketsEntity.TicketBookingConfirmed) error {
+func (r OpsBookingReadModel) OnTicketBookingConfirmed(
+	ctx context.Context,
+	event *ticketsEntity.TicketBookingConfirmed_v1,
+) error {
 	return r.updateReadModelByBookingID(
 		ctx,
 		event.BookingID,
@@ -146,7 +156,7 @@ func (r OpsBookingReadModel) OnTicketBookingConfirmed(ctx context.Context, event
 	)
 }
 
-func (r OpsBookingReadModel) OnTicketRefunded(ctx context.Context, event *ticketsEntity.TicketRefunded) error {
+func (r OpsBookingReadModel) OnTicketRefunded(ctx context.Context, event *ticketsEntity.TicketRefunded_v1) error {
 	return r.updateReadModelByTicketID(
 		ctx,
 		event.TicketID,
@@ -158,7 +168,7 @@ func (r OpsBookingReadModel) OnTicketRefunded(ctx context.Context, event *ticket
 	)
 }
 
-func (r OpsBookingReadModel) OnTicketPrinted(ctx context.Context, event *ticketsEntity.TicketPrinted) error {
+func (r OpsBookingReadModel) OnTicketPrinted(ctx context.Context, event *ticketsEntity.TicketPrinted_v1) error {
 	return r.updateReadModelByTicketID(
 		ctx,
 		event.TicketID,
@@ -171,7 +181,10 @@ func (r OpsBookingReadModel) OnTicketPrinted(ctx context.Context, event *tickets
 	)
 }
 
-func (r OpsBookingReadModel) OnTicketReceiptIssued(ctx context.Context, issued *ticketsEntity.TicketReceiptIssued) error {
+func (r OpsBookingReadModel) OnTicketReceiptIssued(
+	ctx context.Context,
+	issued *ticketsEntity.TicketReceiptIssued_v1,
+) error {
 	return r.updateReadModelByTicketID(
 		ctx,
 		issued.TicketID,
@@ -193,13 +206,15 @@ func (r OpsBookingReadModel) createReadModel(
 		return err
 	}
 
-	_, err = r.db.ExecContext(ctx, `
+	_, err = r.db.ExecContext(
+		ctx, `
 		INSERT INTO 
 		    read_model_ops_bookings (payload, booking_id)
 		VALUES
 			($1, $2)
 		ON CONFLICT (booking_id) DO NOTHING; -- read model may be already updated by another event - we don't want to override
-`, payload, booking.BookingID)
+`, payload, booking.BookingID,
+	)
 
 	if err != nil {
 		return fmt.Errorf("could not create read model: %w", err)
@@ -213,7 +228,7 @@ func (r OpsBookingReadModel) updateReadModelByBookingID(
 	bookingID string,
 	updateFunc func(ticket ticketsEntity.OpsBooking) (ticketsEntity.OpsBooking, error),
 ) (err error) {
-	return updateInTx(
+	err = updateInTx(
 		ctx,
 		r.db,
 		sql.LevelRepeatableRead,
@@ -232,6 +247,16 @@ func (r OpsBookingReadModel) updateReadModelByBookingID(
 			}
 
 			return r.updateReadModel(ctx, tx, updatedRm)
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	return r.eventBus.Publish(
+		ctx, &ticketsEntity.InternalOpsReadModelUpdated{
+			Header:    ticketsEntity.NewMessageHeader(),
+			BookingID: uuid.MustParse(bookingID),
 		},
 	)
 }
@@ -280,13 +305,15 @@ func (r OpsBookingReadModel) updateReadModel(
 		return err
 	}
 
-	_, err = tx.ExecContext(ctx, `
+	_, err = tx.ExecContext(
+		ctx, `
 		INSERT INTO 
 			read_model_ops_bookings (payload, booking_id)
 		VALUES
 			($1, $2)
 		ON CONFLICT (booking_id) DO UPDATE SET payload = excluded.payload;
-		`, payload, rm.BookingID)
+		`, payload, rm.BookingID,
+	)
 	if err != nil {
 		return fmt.Errorf("could not update read model: %w", err)
 	}

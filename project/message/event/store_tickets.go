@@ -9,7 +9,7 @@ import (
 
 func (h Handler) StoreTickets(
 	ctx context.Context,
-	event *ticketsEntity.TicketBookingConfirmed,
+	event *ticketsEntity.TicketBookingConfirmed_v1,
 ) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Storing ticket")
@@ -30,7 +30,7 @@ func (h Handler) StoreTickets(
 
 func (h Handler) RemoveCanceledTicket(
 	ctx context.Context,
-	event *ticketsEntity.TicketBookingCanceled,
+	event *ticketsEntity.TicketBookingCanceled_v1,
 ) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Removing ticket")

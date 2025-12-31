@@ -9,7 +9,7 @@ import (
 
 func (h Handler) StoreEvent(
 	ctx context.Context,
-	event ticketsEntity.Event,
+	event ticketsEntity.ExternalEvent,
 	eventName string,
 	payload []byte,
 ) error {

@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jmoiron/sqlx"
 	ticketsEntity "tickets/entities"
+
+	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 )
 
@@ -23,7 +24,7 @@ func NewEventsRepository(db *sqlx.DB) EventsRepository {
 
 func (s EventsRepository) SaveEvent(
 	ctx context.Context,
-	event ticketsEntity.Event,
+	event ticketsEntity.ExternalEvent,
 	eventName string,
 	payload []byte,
 ) error {

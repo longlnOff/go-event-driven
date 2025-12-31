@@ -98,7 +98,7 @@ func New(
 		rdb,
 		watermillLogger,
 	)
-	opsReadModel := ticketsDB.NewOpsBookingReadModel(dbConn)
+	opsReadModel := ticketsDB.NewOpsBookingReadModel(dbConn, eventBus)
 	router := ticketsMessage.NewRouter(
 		redisSubscriberStore,
 		redisSubscriber,

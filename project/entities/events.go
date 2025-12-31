@@ -28,7 +28,7 @@ func NewMessageHeaderWithIdempotencyKey(idempotencyKey string) MessageHeader {
 	}
 }
 
-type TicketBookingConfirmed struct {
+type TicketBookingConfirmed_v1 struct {
 	Header        MessageHeader `json:"header"`
 	BookingID     string        `json:"booking_id"`
 	TicketID      string        `json:"ticket_id"`
@@ -36,21 +36,33 @@ type TicketBookingConfirmed struct {
 	Price         Money         `json:"price"`
 }
 
-type TicketBookingCanceled struct {
+func (i TicketBookingConfirmed_v1) IsInternal() bool {
+	return false
+}
+
+type TicketBookingCanceled_v1 struct {
 	Header        MessageHeader `json:"header"`
 	TicketID      string        `json:"ticket_id"`
 	CustomerEmail string        `json:"customer_email"`
 	Price         Money         `json:"price"`
 }
 
-type TicketPrinted struct {
+func (i TicketBookingCanceled_v1) IsInternal() bool {
+	return false
+}
+
+type TicketPrinted_v1 struct {
 	Header MessageHeader `json:"header"`
 
 	TicketID string `json:"ticket_id"`
 	FileName string `json:"file_name"`
 }
 
-type BookingMade struct {
+func (i TicketPrinted_v1) IsInternal() bool {
+	return false
+}
+
+type BookingMade_v1 struct {
 	Header MessageHeader `json:"header"`
 
 	NumberOfTickets int    `json:"number_of_tickets"`
@@ -59,7 +71,11 @@ type BookingMade struct {
 	ShowID          string `json:"show_id"`
 }
 
-type TicketReceiptIssued struct {
+func (i BookingMade_v1) IsInternal() bool {
+	return false
+}
+
+type TicketReceiptIssued_v1 struct {
 	Header MessageHeader `json:"header"`
 
 	TicketID      string `json:"ticket_id"`
@@ -68,13 +84,35 @@ type TicketReceiptIssued struct {
 	IssuedAt time.Time `json:"issued_at"`
 }
 
-type TicketRefunded struct {
+func (i TicketReceiptIssued_v1) IsInternal() bool {
+	return false
+}
+
+type TicketRefunded_v1 struct {
 	Header MessageHeader `json:"header"`
 
 	TicketID string `json:"ticket_id"`
 }
 
+func (i TicketRefunded_v1) IsInternal() bool {
+	return false
+}
+
+type InternalOpsReadModelUpdated struct {
+	Header MessageHeader `json:"header"`
+
+	BookingID uuid.UUID `json:"booking_id"`
+}
+
+func (i InternalOpsReadModelUpdated) IsInternal() bool {
+	return true
+}
+
+type Event interface {
+	IsInternal() bool
+}
+
 // We just need to unmarshal the event header; the rest is stored as is.
-type Event struct {
+type ExternalEvent struct {
 	Header MessageHeader `json:"header"`
 }

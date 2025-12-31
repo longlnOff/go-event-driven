@@ -35,27 +35,31 @@ func (t BookingRepository) AddBooking(ctx context.Context, booking ticketsEntity
 		sql.LevelSerializable,
 		func(ctx context.Context, tx *sqlx.Tx) error {
 			availableSeats := 0
-			err := tx.GetContext(ctx, &availableSeats, `
+			err := tx.GetContext(
+				ctx, &availableSeats, `
 				SELECT
 					number_of_tickets AS available_seats
 				FROM
 					shows
 				WHERE
 					show_id = $1
-			`, booking.ShowID)
+			`, booking.ShowID,
+			)
 			if err != nil {
 				return fmt.Errorf("could not get available seats: %w", err)
 			}
 
 			alreadyBookedSeats := 0
-			err = tx.GetContext(ctx, &alreadyBookedSeats, `
+			err = tx.GetContext(
+				ctx, &alreadyBookedSeats, `
 				SELECT
 					COALESCE(SUM(number_of_tickets), 0) AS already_booked_seats
 				FROM
 					bookings
 				WHERE
 					show_id = $1
-			`, booking.ShowID)
+			`, booking.ShowID,
+			)
 			if err != nil {
 				return fmt.Errorf("could not get already booked seats: %w", err)
 			}
@@ -97,13 +101,15 @@ func (t BookingRepository) AddBooking(ctx context.Context, booking ticketsEntity
 			}
 
 			bus := ticketsEvent.NewEventBus(outboxPublisher, watermill.NewSlogLogger(log.FromContext(ctx)))
-			return bus.Publish(ctx, ticketsEntity.BookingMade{
-				Header:          ticketsEntity.NewMessageHeader(),
-				NumberOfTickets: booking.NumberOfTickets,
-				BookingID:       booking.BookingID,
-				CustomerEmail:   booking.CustomerEmail,
-				ShowID:          booking.ShowID,
-			})
+			return bus.Publish(
+				ctx, ticketsEntity.BookingMade_v1{
+					Header:          ticketsEntity.NewMessageHeader(),
+					NumberOfTickets: booking.NumberOfTickets,
+					BookingID:       booking.BookingID,
+					CustomerEmail:   booking.CustomerEmail,
+					ShowID:          booking.ShowID,
+				},
+			)
 		},
 	)
 }

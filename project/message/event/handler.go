@@ -37,7 +37,7 @@ type ShowsRepository interface {
 }
 
 type EventsRepository interface {
-	SaveEvent(ctx context.Context, event ticketsEntity.Event, eventName string, payload []byte) error
+	SaveEvent(ctx context.Context, event ticketsEntity.ExternalEvent, eventName string, payload []byte) error
 }
 
 type Handler struct {

@@ -10,7 +10,7 @@ import (
 
 func (h Handler) CallDeadNation(
 	ctx context.Context,
-	event *ticketsEntity.BookingMade,
+	event *ticketsEntity.BookingMade_v1,
 ) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Calling dead nation")

@@ -9,7 +9,7 @@ import (
 
 func (h Handler) AppendToTracker(
 	ctx context.Context,
-	event *ticketsEntity.TicketBookingConfirmed,
+	event *ticketsEntity.TicketBookingConfirmed_v1,
 ) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Appending ticket to the tracker")

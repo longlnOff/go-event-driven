@@ -9,7 +9,7 @@ import (
 
 func (h Handler) TicketRefundToSheet(
 	ctx context.Context,
-	event *ticketsEntity.TicketBookingCanceled,
+	event *ticketsEntity.TicketBookingCanceled_v1,
 ) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Adding ticket refund to sheet")

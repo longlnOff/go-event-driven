@@ -10,7 +10,7 @@ import (
 
 func (h Handler) PrintTickets(
 	ctx context.Context,
-	event *ticketsEntity.TicketBookingConfirmed,
+	event *ticketsEntity.TicketBookingConfirmed_v1,
 ) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Printing ticket")
@@ -31,7 +31,7 @@ func (h Handler) PrintTickets(
 		return err
 	}
 
-	ticketPrintedEvent := ticketsEntity.TicketPrinted{
+	ticketPrintedEvent := ticketsEntity.TicketPrinted_v1{
 		Header:   ticketsEntity.NewMessageHeaderWithIdempotencyKey(event.Header.IdempotencyKey),
 		TicketID: event.TicketID,
 		FileName: fileName,

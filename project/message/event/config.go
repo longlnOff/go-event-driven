@@ -1,6 +1,9 @@
 package event
 
 import (
+	"fmt"
+	"tickets/entities"
+
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
@@ -20,15 +23,30 @@ func NewEventProcessorConfig(
 ) *cqrs.EventProcessorConfig {
 	return &cqrs.EventProcessorConfig{
 		GenerateSubscribeTopic: func(params cqrs.EventProcessorGenerateSubscribeTopicParams) (string, error) {
-			return "events." + params.EventName, nil
+			handlerEvent := params.EventHandler.NewEvent()
+			event, ok := handlerEvent.(entities.Event)
+			if !ok {
+				return "", fmt.Errorf("invalid event type: %T doesn't implement entities.Event", handlerEvent)
+			}
+
+			var prefix string
+			if event.IsInternal() {
+				prefix = "internal-events.svc-tickets."
+			} else {
+				prefix = "events."
+			}
+
+			return prefix + params.EventName, nil
 		},
 		Marshaler: jsonMarshaler,
 		Logger:    logger,
 		SubscriberConstructor: func(params cqrs.EventProcessorSubscriberConstructorParams) (message.Subscriber, error) {
-			return redisstream.NewSubscriber(redisstream.SubscriberConfig{
-				Client:        rdb,
-				ConsumerGroup: "svc-tickets.events." + params.HandlerName,
-			}, logger)
+			return redisstream.NewSubscriber(
+				redisstream.SubscriberConfig{
+					Client:        rdb,
+					ConsumerGroup: "svc-tickets.events." + params.HandlerName,
+				}, logger,
+			)
 		},
 	}
 }

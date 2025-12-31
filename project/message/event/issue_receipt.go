@@ -9,7 +9,7 @@ import (
 
 func (h Handler) IssueReceipt(
 	ctx context.Context,
-	event *ticketsEntity.TicketBookingConfirmed,
+	event *ticketsEntity.TicketBookingConfirmed_v1,
 ) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Issue Receipt")
@@ -26,12 +26,14 @@ func (h Handler) IssueReceipt(
 	if err != nil {
 		return err
 	}
-	err = h.eventBus.Publish(ctx, ticketsEntity.TicketReceiptIssued{
-		Header:        ticketsEntity.NewMessageHeaderWithIdempotencyKey(event.Header.IdempotencyKey),
-		TicketID:      event.TicketID,
-		ReceiptNumber: TicketReceiptIssued.ReceiptNumber,
-		IssuedAt:      TicketReceiptIssued.IssuedAt,
-	})
+	err = h.eventBus.Publish(
+		ctx, ticketsEntity.TicketReceiptIssued_v1{
+			Header:        ticketsEntity.NewMessageHeaderWithIdempotencyKey(event.Header.IdempotencyKey),
+			TicketID:      event.TicketID,
+			ReceiptNumber: TicketReceiptIssued.ReceiptNumber,
+			IssuedAt:      TicketReceiptIssued.IssuedAt,
+		},
+	)
 	if err != nil {
 		return err
 	}

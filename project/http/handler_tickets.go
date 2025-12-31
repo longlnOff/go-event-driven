@@ -35,7 +35,7 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 		ticket := request.Tickets[i]
 		key := idempotencyKey + ticket.TicketID
 		if ticket.Status == "confirmed" {
-			event := ticketsEntity.TicketBookingConfirmed{
+			event := ticketsEntity.TicketBookingConfirmed_v1{
 				Header:        ticketsEntity.NewMessageHeaderWithIdempotencyKey(key),
 				BookingID:     ticket.BookingId,
 				TicketID:      ticket.TicketID,
@@ -50,7 +50,7 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 				return fmt.Errorf("failed to publish event TicketBookingConfirmed: %w", err)
 			}
 		} else if ticket.Status == "canceled" {
-			event := ticketsEntity.TicketBookingCanceled{
+			event := ticketsEntity.TicketBookingCanceled_v1{
 				Header:        ticketsEntity.NewMessageHeaderWithIdempotencyKey(key),
 				TicketID:      ticket.TicketID,
 				CustomerEmail: ticket.CustomerEmail,
@@ -86,11 +86,13 @@ func (h Handler) GetAllTickets(c echo.Context) error {
 	var response []TicketResponse
 	for i := range tickets {
 		ticket := tickets[i]
-		response = append(response, TicketResponse{
-			TicketID:      ticket.TicketID,
-			CustomerEmail: ticket.CustomerEmail,
-			Price:         ticket.Price,
-		})
+		response = append(
+			response, TicketResponse{
+				TicketID:      ticket.TicketID,
+				CustomerEmail: ticket.CustomerEmail,
+				Price:         ticket.Price,
+			},
+		)
 	}
 
 	return c.JSON(http.StatusOK, response)

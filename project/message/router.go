@@ -58,7 +58,7 @@ func NewRouter(
 		"events",
 		redisSubscriberStore,
 		func(msg *message.Message) error {
-			var event ticketsEntity.Event
+			var event ticketsEntity.ExternalEvent
 			if err := eventProcessorConfig.Marshaler.Unmarshal(msg, &event); err != nil {
 				return fmt.Errorf("cannot unmarshal event: %w", err)
 			}
