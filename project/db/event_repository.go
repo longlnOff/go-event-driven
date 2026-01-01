@@ -22,7 +22,7 @@ func NewEventsRepository(db *sqlx.DB) EventsRepository {
 	return EventsRepository{db: db}
 }
 
-func (s EventsRepository) SaveEvent(
+func (s EventsRepository) SaveEvents(
 	ctx context.Context,
 	event ticketsEntity.ExternalEvent,
 	eventName string,
@@ -54,4 +54,14 @@ func (s EventsRepository) SaveEvent(
 	}
 	return nil
 
+}
+
+func (d EventsRepository) GetEvents(ctx context.Context) ([]ticketsEntity.DataLakeEvent, error) {
+	var events []ticketsEntity.DataLakeEvent
+	err := d.db.SelectContext(ctx, &events, "SELECT * FROM events ORDER BY published_at ASC")
+	if err != nil {
+		return nil, fmt.Errorf("could not get events from data lake: %w", err)
+	}
+
+	return events, nil
 }

@@ -1,9 +1,11 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/lib/pq"
 )
 
 func (h Handler) GetAllBookingByDate(c echo.Context) error {
@@ -27,7 +29,15 @@ func (h Handler) GetBookingByID(c echo.Context) error {
 	)
 
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+
+		var postgresError *pq.Error
+		if errors.As(err, &postgresError) && postgresError.Code.Name() == "unique_violation" {
+			// handling re-delivery
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		// return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+
 	}
 	return c.JSON(http.StatusOK, booking)
 }

@@ -9,7 +9,6 @@ import (
 	ticketsAdapter "tickets/adapters"
 	ticketsMessage "tickets/message"
 	ticketsService "tickets/service"
-
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 	"github.com/jmoiron/sqlx"
@@ -60,6 +59,7 @@ func main() {
 		deadNationService,
 		rdb,
 	).Run(ctx)
+
 	if err != nil {
 		panic(err)
 	}

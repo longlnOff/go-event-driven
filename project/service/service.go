@@ -11,7 +11,7 @@ import (
 	ticketsCommand "tickets/message/command"
 	ticketsEvent "tickets/message/event"
 	ticketsOutbox "tickets/message/outbox"
-
+	readModelMigration "tickets/migrate_read_model"
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
@@ -27,6 +27,8 @@ type Service struct {
 	db            *sqlx.DB
 	echoRouter    *echo.Echo
 	messageRouter *message.Router
+	opsReadModel  ticketsDB.OpsBookingReadModel
+	eventRepo     ticketsDB.EventsRepository
 }
 
 type ReceiptService interface {
@@ -125,6 +127,8 @@ func New(
 		db:            dbConn,
 		echoRouter:    echoRouter,
 		messageRouter: router,
+		opsReadModel:  opsReadModel,
+		eventRepo:     eventRepo,
 	}
 }
 
@@ -149,6 +153,13 @@ func (s Service) Run(ctx context.Context) error {
 			return nil
 		},
 	)
+
+	go func() {
+		if err := readModelMigration.MigrateReadModel(ctx, s.eventRepo, s.opsReadModel); err != nil {
+			log.FromContext(ctx).With("error", err).Error("failed to migrate read model")
+		}
+	}()
+
 	errGroup.Go(
 		func() error {
 			<-ctx.Done()

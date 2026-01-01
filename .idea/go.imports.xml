@@ -4,6 +4,8 @@
     <option name="excludedPackages">
       <array>
         <option value="github.com/iris-contrib/go.uuid as uuid" />
+        <option value="github.com/iris-contrib/go.uuid as uuid" />
+        <option value="github.com/jackc/pgtype/ext/gofrs-uuid as uuid" />
         <option value="github.com/jackc/pgtype/ext/gofrs-uuid as uuid" />
         <option value="github.com/kataras/iris/v12/context" />
         <option value="github.com/pkg/errors" />

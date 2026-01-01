@@ -16,7 +16,7 @@ func (h Handler) StoreEvent(
 	logger := log.FromContext(ctx)
 	logger.Info("store event")
 
-	err := h.eventRepository.SaveEvent(ctx, event, eventName, payload)
+	err := h.eventRepository.SaveEvents(ctx, event, eventName, payload)
 	if err != nil {
 		logger.Error("failed to store event")
 		return err
