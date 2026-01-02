@@ -4,6 +4,7 @@ import (
 	libHttp "github.com/ThreeDotsLabs/go-event-driven/v2/common/http"
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/labstack/echo/v4"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func NewHttpRouter(
@@ -36,5 +37,9 @@ func NewHttpRouter(
 	e.PUT("ticket-refund/:ticket_id", handler.PutTicketRefund)
 	e.GET("/ops/bookings", handler.GetAllBookingByDate)
 	e.GET("/ops/bookings/:id", handler.GetBookingByID)
+
+	// for metrics
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
+
 	return e
 }

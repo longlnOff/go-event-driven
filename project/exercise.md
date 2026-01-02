@@ -1,45 +1,23 @@
-# Migrating the Read Model
+# Message Processing Metrics
 
-Remember we wanted to learn how to {{exerciseLink "migrate our read models" "15-data-lake" "01-data-lake"}}?
-We now have all the building blocks.
-It's time to put them together!
+We now have a pretty solid base on Prometheus metrics. Let's use it to measure something more meaningful than a dummy metric.
 
-{{tip}}
+We will add three metrics:
 
-The {{exerciseLink "data lake module" "15-data-lake" "01-data-lake"}} was optional.
-You may have skipped it.
+- `messages_processed_total`: The total number of processed messages (counter)
+- `messages_processing_failed_total`: The total number of message processing failures (counter)
+- `messages_processing_duration_seconds`: The total time spent processing messages (summary with quantiles 0.5, 0.9, and 0.99)
 
-If you want to revisit, use `tdl tr jump` to jump to the module and complete it now.
-
-{{endtip}}
-
-Usually, to migrate the read model, you need to follow these steps:
-
-1. Query events from the data lake one by one, from oldest to newest.
-2. If needed, do a mapping of versions (your read model may be built from newer versions of events, 
-while in the data lake, you may have older versions).
-3. Call your read model methods to build it. 
-   Usually, it will be some form of a repository similar to what you implemented in {{exerciseLink "13-read-models/01-read-models" "13-read-models" "01-read-models"}}.
-   You can simplify your life by calling read model repository methods directly, not via message handlers.
-   You don't need to publish a message or event. Just call the repository method directly.
-
-It's how we'll migrate our read model in this exercise.
+We want to know which topics and handlers are processing the most messages (or failing the most).
+We need to add labels `topic` and `handler` to our metrics to know that.
 
 {{tip}}
 
-Usually, if the migration is long-running, you may want to do the migration in the background and have some resume mechanism. 
-For example, you can store the last timestamp of the event that you processed and
-start from that timestamp when you resume the migration.
+Please remember to avoid high-cardinality labels because they can lead to high memory usage and performance issues.
 
-In our case, it will be not needed.
-
-{{endtip}}
-
-{{tip}}
-
-What if you needed to build a new read model but didn't have a data lake?
-You can always do some reverse-engineering and build a read model based on your {{exerciseLink "write model" "13-read-models" "01-read-models"}}.
-You can query your production tables (like the `bookings` table) and build a read model from that data.
+In many cases, having a label for each error message is not a good idea. 
+If you have an error message with a different message for each request (or message) and they occur often,
+this may lead to high memory usage and performance issues — in a worst-case scenario, it can crash your application due to lack of memory.
 
 {{endtip}}
 
@@ -47,239 +25,130 @@ You can query your production tables (like the `bookings` table) and build a rea
 
 Exercise path: ./project
 
-Ensure the `events` table has the same schema as in the {{exerciseLink "15-data-lake/03-project-store-events-to-data-lake" "15-data-lake" "03-project-store-events-to-data-lake"}} exercise.
+To add metrics with labels, we need to use the [`NewCounterVec`](https://pkg.go.dev/github.com/prometheus/client_golang/prometheus/promauto#NewCounterVec) and [`NewSummaryVec`](https://pkg.go.dev/github.com/prometheus/client_golang/prometheus/promauto#NewSummaryVec) functions.
+They are very similar to the [https://pkg.go.dev/github.com/prometheus/client_golang/prometheus/promauto#NewCounter](`NewCounter`) and [`NewSummary`](https://pkg.go.dev/github.com/prometheus/client_golang/prometheus/promauto#NewSummary) functions, but they can handle the same metrics with different labels.
 
-1. **Wait for us to insert the old events to the `events` table.** 
-We will insert events there after the table is created.
-**We insert all events at once. You can safely assume that if the `events` table is not empty, you can migrate your read model.**
-
-**Do not start migration before we populate the `events` table.**
-You can run the migration in a goroutine. 
-Put it in a function that runs your service or in the `main` function.
-
-2. Iterate over all events in the `events` table. **Start from the oldest one.**
-
-3. Unmarshal events from the data lake to your events format.
-
-**We will publish events with version `v0` since we don't know your exact event format.**
-
-The events that we will add to the `events` table are:
-- `BookingMade_v0`
-- `TicketBookingConfirmed_v0`
-- `TicketReceiptIssued_v0`
-- `TicketRefunded_v0`
-- `TicketPrinted_v0`
-
-In a format:
+In the metric options, we need to provide the label names we will use.
+For the _summary_ metric, we also need to provide how precise we want our quantiles to be.
+In the configuration, it's called `Objectives` and is a map of quantiles to their absolute error.
 
 ```go
-type bookingMade_v0 struct {
-	Header entities.MessageHeader `json:"header"`
+import (
+    "tickets/adapters"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
 
-	NumberOfTickets int `json:"number_of_tickets"`
+// ...
 
-	BookingID uuid.UUID `json:"booking_id"`
-
-	CustomerEmail string    `json:"customer_email"`
-	ShowID        uuid.UUID `json:"show_id"`
-}
-
-type ticketBookingConfirmed_v0 struct {
-	Header entities.MessageHeader `json:"header"`
-
-	TicketID      string         `json:"ticket_id"`
-	CustomerEmail string         `json:"customer_email"`
-	Price         entities.Money `json:"price"`
-
-	BookingID string `json:"booking_id"`
-}
-
-type ticketReceiptIssued_v0 struct {
-	Header entities.MessageHeader `json:"header"`
-
-	TicketID      string `json:"ticket_id"`
-	ReceiptNumber string `json:"receipt_number"`
-
-	IssuedAt time.Time `json:"issued_at"`
-}
-
-type ticketPrinted_v0 struct {
-	Header entities.MessageHeader `json:"header"`
-
-	TicketID string `json:"ticket_id"`
-	FileName string `json:"file_name"`
-}
-
-type ticketRefunded_v0 struct {
-	Header entities.MessageHeader `json:"header"`
-
-	TicketID string `json:"ticket_id"`
-}
+messagesProcessingDuration = promauto.NewSummaryVec(
+    prometheus.SummaryOpts{
+        Namespace:  "messages",
+        Name:       "processing_duration_seconds",
+        Help:       "The total time spent processing messages",
+        Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+    },
+    []string{"topic", "handler"},
+)
 ```
 
-4. Map `v0` events to your `v1` events. Migrate your Ops read model (`read_model_ops_bookings`) based on events from the data lake.
+We can implement all of these metrics in {{exerciseLink "message middleware" "06-middlewares" "01-add-middleware"}}.
 
-Call your read model methods directly.
-For example:
+You can extract the topic and event name from the message context:
 
 ```go
-bookingConfirmedEvent, err := unmarshalDataLakeEvent[ticketBookingConfirmed_v0](event)
-if err != nil {
-   return err
-}
+import (
+    "tickets/adapters"
+    "github.com/ThreeDotsLabs/watermill/message"
+)
 
-return rm.OnTicketBookingConfirmed(ctx, &entities.TicketBookingConfirmed_v1{
-   // you should map v0 event to your v1 event here
-   Header:        bookingConfirmedEvent.Header,
-   TicketID:      bookingConfirmedEvent.TicketID,
-   CustomerEmail: bookingConfirmedEvent.CustomerEmail,
-   Price:         bookingConfirmedEvent.Price,
-   BookingID:     bookingConfirmedEvent.BookingID,
-})
+// ...
+
+topic := message.SubscribeTopicFromCtx(msg.Context())
+handler := message.HandlerNameFromCtx(msg.Context())
 ```
 
-**We'll verify your solution by querying the HTTP endpoint to get data from the Read Model.**
+To store the metric with a label, we need to call:
 
-{{tip}}
+```go
+labels := prometheus.Labels{"topic": topic, "handler": handler}
 
-In the real world, you may not need to build a read model from the oldest data.
-You may decide on some cut-off date and build the read model only from that date.
-It depends on the use case, but if you are going to build it from the newest data, mapping may be not needed.
+// ...
 
-{{endtip}}
+messagesProcessedCounter.With(labels).Inc()
+```
 
-{{tip}}
+The resulting metrics should look like this:
 
-We recommend adding a good amount of logs to your migration.
-It's not unusual that such migrations take longer than expected or something goes wrong.
-It's worth logging the progress, how many events were processed, how much time it took, etc.
+```text
+# HELP messages_processed_total The total number of processed messages
+# TYPE messages_processed_total counter
+messages_processed_total{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1"} 1
+messages_processed_total{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1"} 1
+messages_processed_total{handler="IssueReceipt",topic="events.TicketBookingConfirmed_v1"} 1
+messages_processed_total{handler="PrintTicketHandler",topic="events.TicketBookingConfirmed_v1"} 1
+messages_processed_total{handler="StoreTickets",topic="events.TicketBookingConfirmed_v1"} 1
+messages_processed_total{handler="TicketRefund",topic="commands.RefundTicket"} 1
+messages_processed_total{handler="events_forwarder",topic="events_to_forward"} 1
+messages_processed_total{handler="events_splitter",topic="events"} 5
+messages_processed_total{handler="ops_read_model.IssueReceiptHandler",topic="events.TicketReceiptIssued_v1"} 1
+messages_processed_total{handler="ops_read_model.OnBookingMade",topic="events.BookingMade_v1"} 1
+messages_processed_total{handler="ops_read_model.OnTicketBookingConfirmed",topic="events.TicketBookingConfirmed_v1"} 1
+messages_processed_total{handler="ops_read_model.OnTicketPrinted",topic="events.TicketPrinted_v1"} 1
+messages_processed_total{handler="ops_read_model.OnTicketRefunded",topic="events.TicketRefunded_v1"} 1
+messages_processed_total{handler="store_to_data_lake",topic="events"} 3
 
-{{endtip}}
+# HELP messages_processing_duration_seconds The total time spent processing messages
+# TYPE messages_processing_duration_seconds summary
+messages_processing_duration_seconds{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1",quantile="0.5"} 0.137299958
+messages_processing_duration_seconds{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1",quantile="0.9"} 0.137299958
+messages_processing_duration_seconds{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1",quantile="0.99"} 0.137299958
+messages_processing_duration_seconds_sum{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1"} 0.137299958
+messages_processing_duration_seconds_count{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1"} 1
+messages_processing_duration_seconds{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1",quantile="0.5"} 0.218044
+messages_processing_duration_seconds{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1",quantile="0.9"} 0.218044
+messages_processing_duration_seconds{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1",quantile="0.99"} 0.218044
+messages_processing_duration_seconds_sum{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1"} 0.218044
+messages_processing_duration_seconds_count{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1"} 1
+// ...
+```
 
 {{hints}}
 
 {{hint 1}}
 
-This is an example method in the data lake repository. It gets all events in the correct order.
+To record the duration of message processing, you can call [`time.Now()`](https://pkg.go.dev/time#Now) at the beginning of the middleware and [`time.Since()`](https://pkg.go.dev/time#Since) at the end.
 
 ```go
-
-type DataLakeEvent struct {
-	EventID      string    `db:"event_id"`
-	PublishedAt  time.Time `db:"published_at"`
-	EventName    string    `db:"event_name"`
-	EventPayload []byte    `db:"event_payload"`
-}
+start := time.Now()
 
 // ...
 
-func (d DataLake) GetEvents(ctx context.Context) ([]entities.DataLakeEvent, error) {
-	var events []entities.DataLakeEvent
-	err := d.db.SelectContext(ctx, &events, "SELECT * FROM events ORDER BY published_at ASC")
-	if err != nil {
-		return nil, fmt.Errorf("could not get events from data lake: %w", err)
-	}
-
-	return events, nil
-}
+messagesProcessingDuration.With(labels).Observe(time.Since(start).Seconds())
 ```
 
 {{endhint}}
 
 {{hint 2}}
 
-Here's an example generic function to unmarshal a data lake event into a struct:
+To find out that message processing failed, it's enough to check if the error from the next handler is not nil.
+
 
 ```go
-func unmarshalDataLakeEvent[T any](event entities.DataLakeEvent) (*T, error) {
-	eventInstance := new(T)
+router.AddMiddleware(func(h message.HandlerFunc) message.HandlerFunc {
+    return func(msg *message.Message) (events []*message.Message, err error) {
+        // ...
+		
+        msgs, err := h(msg)
+        if err != nil {
+            messagesProcessingFailedCounter.With(labels).Inc()
+        }
 
-	err := json.Unmarshal(event.EventPayload, &eventInstance)
-	if err != nil {
-		return nil, fmt.Errorf("could not unmarshal event %s: %w", event.EventName, err)
-	}
+        // ...
 
-	return eventInstance, nil
-}
-```
-
-{{endhint}}
-
-{{hint 3}}
-
-Here's an example of mapping events from `v0` to `v1` and calling the read model:
-
-```go
-func migrateEvent(ctx context.Context, event entities.DataLakeEvent, rm db.OpsBookingReadModel) error {
-	switch event.EventName {
-	case "BookingMade_v0":
-		bookingMade, err := unmarshalDataLakeEvent[bookingMade_v0](event)
-		if err != nil {
-			return err
-		}
-
-		return rm.OnBookingMade(ctx, &entities.BookingMade_v1{
-			// you should map v0 event to your v1 event here
-			Header:          bookingMade.Header,
-			NumberOfTickets: bookingMade.NumberOfTickets,
-			BookingID:       bookingMade.BookingID,
-			CustomerEmail:   bookingMade.CustomerEmail,
-			ShowID:          bookingMade.ShowID,
-		})
-	case "TicketBookingConfirmed_v0":
-		bookingConfirmedEvent, err := unmarshalDataLakeEvent[ticketBookingConfirmed_v0](event)
-		if err != nil {
-			return err
-		}
-
-		return rm.OnTicketBookingConfirmed(ctx, &entities.TicketBookingConfirmed_v1{
-			// you should map v0 event to your v1 event here
-			Header:        bookingConfirmedEvent.Header,
-			TicketID:      bookingConfirmedEvent.TicketID,
-			CustomerEmail: bookingConfirmedEvent.CustomerEmail,
-			Price:         bookingConfirmedEvent.Price,
-			BookingID:     bookingConfirmedEvent.BookingID,
-		})
-	case "TicketReceiptIssued_v0":
-		receiptIssuedEvent, err := unmarshalDataLakeEvent[ticketReceiptIssued_v0](event)
-		if err != nil {
-			return err
-		}
-
-		return rm.OnTicketReceiptIssued(ctx, &entities.TicketReceiptIssued_v1{
-			// you should map v0 event to your v1 event here
-			Header:        receiptIssuedEvent.Header,
-			TicketID:      receiptIssuedEvent.TicketID,
-			ReceiptNumber: receiptIssuedEvent.ReceiptNumber,
-			IssuedAt:      receiptIssuedEvent.IssuedAt,
-		})
-	case "TicketPrinted_v0":
-		ticketPrintedEvent, err := unmarshalDataLakeEvent[ticketPrinted_v0](event)
-		if err != nil {
-			return err
-		}
-
-		return rm.OnTicketPrinted(ctx, &entities.TicketPrinted_v1{
-			// you should map v0 event to your v1 event here
-			Header:   ticketPrintedEvent.Header,
-			TicketID: ticketPrintedEvent.TicketID,
-			FileName: ticketPrintedEvent.FileName,
-		})
-	case "TicketRefunded_v0":
-		ticketRefundedEvent, err := unmarshalDataLakeEvent[ticketRefunded_v0](event)
-		if err != nil {
-			return err
-		}
-
-		return rm.OnTicketRefunded(ctx, &entities.TicketRefunded_v1{
-			// you should map v0 event to your v1 event here
-			Header:   ticketRefundedEvent.Header,
-			TicketID: ticketRefundedEvent.TicketID,
-		})
-	default:
-		return fmt.Errorf("unknown event %s", event.EventName)
-	}
-}
+        return msgs, err
+    }
+})
 ```
 
 {{endhint}}

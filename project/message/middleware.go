@@ -9,7 +9,54 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/lithammer/shortuuid/v3"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
+
+var (
+	messagesProcessingDuration = promauto.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Namespace:  "messages",
+			Name:       "processing_duration_seconds",
+			Help:       "The total time spent processing messages",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		},
+		[]string{"topic", "handler"},
+	)
+
+	messagesProcessingFailedCounter = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "messages",
+			Name:      "processing_failed_count",
+		},
+		[]string{"topic", "handler"},
+	)
+
+	messagesProcessingTotalCounter = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "messages",
+			Name:      "processed_total",
+		},
+		[]string{"topic", "handler"},
+	)
+)
+
+func MetricsMiddleware() func(h message.HandlerFunc) message.HandlerFunc {
+	return func(h message.HandlerFunc) message.HandlerFunc {
+		return func(msg *message.Message) (events []*message.Message, err error) {
+			start := time.Now()
+			topic := message.SubscribeTopicFromCtx(msg.Context())
+			handler := message.HandlerNameFromCtx(msg.Context())
+			msgs, err := h(msg)
+			messagesProcessingDuration.WithLabelValues(topic, handler).Observe(time.Since(start).Seconds())
+			messagesProcessingTotalCounter.With(prometheus.Labels{"topic": topic, "handler": handler}).Inc()
+			if err != nil {
+				messagesProcessingFailedCounter.With(prometheus.Labels{"topic": topic, "handler": handler}).Inc()
+			}
+			return msgs, err
+		}
+	}
+}
 
 func LoggingMiddleware() func(h message.HandlerFunc) message.HandlerFunc {
 	return func(next message.HandlerFunc) message.HandlerFunc {
@@ -69,4 +116,5 @@ func AddMiddleWare(router *message.Router, watermillLogger watermill.LoggerAdapt
 	router.AddMiddleware(CorrelationIdMiddleware())
 	router.AddMiddleware(LoggingMiddleware())
 	router.AddMiddleware(RetryMiddleware(watermillLogger))
+	router.AddMiddleware(MetricsMiddleware())
 }

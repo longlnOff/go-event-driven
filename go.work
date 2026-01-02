@@ -27,5 +27,6 @@ use (
 	./14-message-ordering/03-partition-per-entity
 	./14-message-ordering/04-versioning-entities
 	./14-message-ordering/05-independent-updates
+	./19-tracing/01-tracing
 	./project
 )
