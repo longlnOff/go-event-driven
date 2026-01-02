@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	ticketsDB "tickets/db"
 	ticketsHttp "tickets/http"
 	ticketsMessage "tickets/message"
@@ -12,6 +13,7 @@ import (
 	ticketsEvent "tickets/message/event"
 	ticketsOutbox "tickets/message/outbox"
 	readModelMigration "tickets/migrate_read_model"
+
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
@@ -20,6 +22,13 @@ import (
 	"github.com/labstack/echo/v4"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -29,6 +38,7 @@ type Service struct {
 	messageRouter *message.Router
 	opsReadModel  ticketsDB.OpsBookingReadModel
 	eventRepo     ticketsDB.EventsRepository
+	traceProvider *tracesdk.TracerProvider
 }
 
 type ReceiptService interface {
@@ -45,6 +55,8 @@ func New(
 	deadNationService ticketsEvent.DeadNationService,
 	rdb redis.UniversalClient,
 ) Service {
+	traceProvider := ConfigureTraceProvider()
+
 	watermillLogger := watermill.NewSlogLogger(log.FromContext(context.Background()))
 	publisher := ticketsMessage.NewRedisPublisher(rdb, watermillLogger)
 	eventBus := ticketsEvent.NewEventBus(publisher, watermillLogger)
@@ -122,13 +134,13 @@ func New(
 		bookingRepo,
 		opsReadModel,
 	)
-
 	return Service{
 		db:            dbConn,
 		echoRouter:    echoRouter,
 		messageRouter: router,
 		opsReadModel:  opsReadModel,
 		eventRepo:     eventRepo,
+		traceProvider: traceProvider,
 	}
 }
 
@@ -163,9 +175,47 @@ func (s Service) Run(ctx context.Context) error {
 	errGroup.Go(
 		func() error {
 			<-ctx.Done()
+			return s.traceProvider.Shutdown(context.Background())
+		},
+	)
+
+	errGroup.Go(
+		func() error {
+			<-ctx.Done()
 			return s.echoRouter.Shutdown(context.Background())
 		},
 	)
 
 	return errGroup.Wait()
+}
+
+func ConfigureTraceProvider() *tracesdk.TracerProvider {
+	jaegerEndpoint := os.Getenv("JAEGER_ENDPOINT")
+	if jaegerEndpoint == "" {
+		jaegerEndpoint = fmt.Sprintf("%s/jaeger-api/api/traces", os.Getenv("GATEWAY_ADDR"))
+	}
+
+	exp, err := otlptracehttp.New(context.Background(), otlptracehttp.WithEndpointURL(jaegerEndpoint))
+	if err != nil {
+		panic(err)
+	}
+
+	tp := tracesdk.NewTracerProvider(
+		// WARNING: `tracesdk.WithSyncer` should be not used in production,
+		// for prod you should use `tracesdk.WithBatcher`
+		tracesdk.WithSyncer(exp),
+		tracesdk.WithResource(
+			resource.NewWithAttributes(
+				semconv.SchemaURL,
+				semconv.ServiceName("tickets"),
+			),
+		),
+	)
+
+	otel.SetTracerProvider(tp)
+
+	// don't forget about that! lack of that line will cause that trace will not be propagated via messages
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	return tp
 }

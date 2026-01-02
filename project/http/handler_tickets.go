@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/labstack/echo/v4"
-
 	ticketsEntity "tickets/entities"
+
+	"github.com/labstack/echo/v4"
+	"go.opentelemetry.io/otel"
 )
 
 type TicketStatusRequest struct {
@@ -22,6 +23,12 @@ type TicketsStatusRequest struct {
 }
 
 func (h Handler) PostTicketsStatus(c echo.Context) error {
+	ctx := c.Request().Context()
+	ctx, span := otel.Tracer("").Start(
+		ctx,
+		fmt.Sprintf("%s", c.Request().URL.Path),
+	)
+	defer span.End()
 	var request TicketsStatusRequest
 	err := c.Bind(&request)
 	if err != nil {
@@ -43,7 +50,7 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 				Price:         ticket.Price,
 			}
 			err = h.eventBus.Publish(
-				c.Request().Context(),
+				ctx,
 				event,
 			)
 			if err != nil {
@@ -57,7 +64,7 @@ func (h Handler) PostTicketsStatus(c echo.Context) error {
 				Price:         ticket.Price,
 			}
 			err = h.eventBus.Publish(
-				c.Request().Context(),
+				ctx,
 				event,
 			)
 			if err != nil {

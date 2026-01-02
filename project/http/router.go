@@ -5,6 +5,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/labstack/echo/v4"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 )
 
 func NewHttpRouter(
@@ -40,6 +41,9 @@ func NewHttpRouter(
 
 	// for metrics
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
+
+	// use this for add spans for all coming http request
+	e.Use(otelecho.Middleware("tickets"))
 
 	return e
 }

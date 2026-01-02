@@ -1,156 +1,109 @@
-# Message Processing Metrics
+# Tracing Beyond Messages
 
-We now have a pretty solid base on Prometheus metrics. Let's use it to measure something more meaningful than a dummy metric.
+We focus on tracing in the context of messages. But there are other topics worth considering in your projects.
 
-We will add three metrics:
+## Exposing the trace ID
 
-- `messages_processed_total`: The total number of processed messages (counter)
-- `messages_processing_failed_total`: The total number of message processing failures (counter)
-- `messages_processing_duration_seconds`: The total time spent processing messages (summary with quantiles 0.5, 0.9, and 0.99)
+It's useful to be able to know the trace ID of the request.
 
-We want to know which topics and handlers are processing the most messages (or failing the most).
-We need to add labels `topic` and `handler` to our metrics to know that.
+It's good enough to just log it somewhere, so you're able to correlate logs with traces.
+You can also add it to each log line as a field (but this is not recommended locally — it will pollute your logs a lot).
+You can extract the trace ID from the context by calling [`trace.SpanContextFromContext(ctx).TraceID().String()`](https://pkg.go.dev/go.opentelemetry.io/otel/trace#SpanContextFromContext).
 
-{{tip}}
+You can also use a trick here: Use the trace ID as a correlation ID.
+This will let you simplify your service logic and remove the propagation of the correlation ID.
+Of course, to do that, you need to adjust your logging logic.
 
-Please remember to avoid high-cardinality labels because they can lead to high memory usage and performance issues.
+## Adding HTTP requests to traces
 
-In many cases, having a label for each error message is not a good idea. 
-If you have an error message with a different message for each request (or message) and they occur often,
-this may lead to high memory usage and performance issues — in a worst-case scenario, it can crash your application due to lack of memory.
+You can achieve this with the [`go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp`](go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp) library.
 
-{{endtip}}
+You need to use a custom HTTP client for your API clients:
+
+```diff
+ import (
+    "tickets/adapters"
+ 	"context"
++	"fmt"
+ 	"net/http"
+ 	"os"
+ 	"os/signal"
+ 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
+ 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
+ 	"github.com/jmoiron/sqlx"
++	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
++	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+ )
+ 
+ func main() {
+ 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+ 	defer cancel()
+ 
+-	apiClients, err := clients.NewClients(
++	traceHttpClient := &http.Client{Transport: otelhttp.NewTransport(
++		http.DefaultTransport,
++		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
++			return fmt.Sprintf("HTTP %s %s %s", r.Method, r.URL.String(), operation)
++		}),
++	)}
++
++	apiClients, err := clients.NewClientsWithHttpClient(
+ 		os.Getenv("GATEWAY_ADDR"),
+ 		func(ctx context.Context, req *http.Request) error {
+ 			req.Header.Set("Correlation-ID", log.CorrelationIDFromContext(ctx))
+ 			return nil
+ 		},
++		traceHttpClient,
+ 	)
+```
+
+This will automagically add all outgoing HTTP requests to traces.
+It would also add the `traceparent` header to all outgoing HTTP requests, but we call external APIs only, so it won't be used.
+
+However, if you call your own services, you'll be able to see them all in traces.
+
+## Adding SQL queries to traces
+
+It's nice to have SQL queries in traces, especially when debugging some performance issues.
+
+To do that, you need to wrap your SQL connection with [`github.com/uptrace/opentelemetry-go-extra/otelsql`](github.com/uptrace/opentelemetry-go-extra/otelsql).
+
+```diff
+ import (
+    "tickets/adapters"
+ 	"context"
+ 	"net/http"
+ 	"os"
+ 	"os/signal"
+@@ -14,24 +15,43 @@ import (
+    "tickets/adapters"
+ 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/clients"
+ 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
+ 	"github.com/jmoiron/sqlx"
++	"github.com/uptrace/opentelemetry-go-extra/otelsql"
+ )
+ 
+
+-	db, err := sqlx.Open("postgres", os.Getenv("POSTGRES_URL"))
++	traceDB, err := otelsql.Open("postgres", os.Getenv("POSTGRES_URL"),
++		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
++		otelsql.WithDBName("db"))
++	if err != nil {
++		panic(err)
++	}
++
++	db := sqlx.NewDb(traceDB, "postgres")
+ 	if err != nil {
+ 		panic(err)
+ 	}
+```
+
+As long as you pass the context to all your SQL queries (`ExecContext`, `NamedExecContext`, etc.), they will be added to traces.
 
 ## Exercise
 
 Exercise path: ./project
 
-To add metrics with labels, we need to use the [`NewCounterVec`](https://pkg.go.dev/github.com/prometheus/client_golang/prometheus/promauto#NewCounterVec) and [`NewSummaryVec`](https://pkg.go.dev/github.com/prometheus/client_golang/prometheus/promauto#NewSummaryVec) functions.
-They are very similar to the [https://pkg.go.dev/github.com/prometheus/client_golang/prometheus/promauto#NewCounter](`NewCounter`) and [`NewSummary`](https://pkg.go.dev/github.com/prometheus/client_golang/prometheus/promauto#NewSummary) functions, but they can handle the same metrics with different labels.
+We won't check your solution for this, but we recommend adding tracing for HTTP requests and SQL queries.
 
-In the metric options, we need to provide the label names we will use.
-For the _summary_ metric, we also need to provide how precise we want our quantiles to be.
-In the configuration, it's called `Objectives` and is a map of quantiles to their absolute error.
-
-```go
-import (
-    "tickets/adapters"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-)
-
-// ...
-
-messagesProcessingDuration = promauto.NewSummaryVec(
-    prometheus.SummaryOpts{
-        Namespace:  "messages",
-        Name:       "processing_duration_seconds",
-        Help:       "The total time spent processing messages",
-        Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-    },
-    []string{"topic", "handler"},
-)
-```
-
-We can implement all of these metrics in {{exerciseLink "message middleware" "06-middlewares" "01-add-middleware"}}.
-
-You can extract the topic and event name from the message context:
-
-```go
-import (
-    "tickets/adapters"
-    "github.com/ThreeDotsLabs/watermill/message"
-)
-
-// ...
-
-topic := message.SubscribeTopicFromCtx(msg.Context())
-handler := message.HandlerNameFromCtx(msg.Context())
-```
-
-To store the metric with a label, we need to call:
-
-```go
-labels := prometheus.Labels{"topic": topic, "handler": handler}
-
-// ...
-
-messagesProcessedCounter.With(labels).Inc()
-```
-
-The resulting metrics should look like this:
-
-```text
-# HELP messages_processed_total The total number of processed messages
-# TYPE messages_processed_total counter
-messages_processed_total{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1"} 1
-messages_processed_total{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1"} 1
-messages_processed_total{handler="IssueReceipt",topic="events.TicketBookingConfirmed_v1"} 1
-messages_processed_total{handler="PrintTicketHandler",topic="events.TicketBookingConfirmed_v1"} 1
-messages_processed_total{handler="StoreTickets",topic="events.TicketBookingConfirmed_v1"} 1
-messages_processed_total{handler="TicketRefund",topic="commands.RefundTicket"} 1
-messages_processed_total{handler="events_forwarder",topic="events_to_forward"} 1
-messages_processed_total{handler="events_splitter",topic="events"} 5
-messages_processed_total{handler="ops_read_model.IssueReceiptHandler",topic="events.TicketReceiptIssued_v1"} 1
-messages_processed_total{handler="ops_read_model.OnBookingMade",topic="events.BookingMade_v1"} 1
-messages_processed_total{handler="ops_read_model.OnTicketBookingConfirmed",topic="events.TicketBookingConfirmed_v1"} 1
-messages_processed_total{handler="ops_read_model.OnTicketPrinted",topic="events.TicketPrinted_v1"} 1
-messages_processed_total{handler="ops_read_model.OnTicketRefunded",topic="events.TicketRefunded_v1"} 1
-messages_processed_total{handler="store_to_data_lake",topic="events"} 3
-
-# HELP messages_processing_duration_seconds The total time spent processing messages
-# TYPE messages_processing_duration_seconds summary
-messages_processing_duration_seconds{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1",quantile="0.5"} 0.137299958
-messages_processing_duration_seconds{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1",quantile="0.9"} 0.137299958
-messages_processing_duration_seconds{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1",quantile="0.99"} 0.137299958
-messages_processing_duration_seconds_sum{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1"} 0.137299958
-messages_processing_duration_seconds_count{handler="AppendToTracker",topic="events.TicketBookingConfirmed_v1"} 1
-messages_processing_duration_seconds{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1",quantile="0.5"} 0.218044
-messages_processing_duration_seconds{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1",quantile="0.9"} 0.218044
-messages_processing_duration_seconds{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1",quantile="0.99"} 0.218044
-messages_processing_duration_seconds_sum{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1"} 0.218044
-messages_processing_duration_seconds_count{handler="BookPlaceInDeadNation",topic="events.BookingMade_v1"} 1
-// ...
-```
-
-{{hints}}
-
-{{hint 1}}
-
-To record the duration of message processing, you can call [`time.Now()`](https://pkg.go.dev/time#Now) at the beginning of the middleware and [`time.Since()`](https://pkg.go.dev/time#Since) at the end.
-
-```go
-start := time.Now()
-
-// ...
-
-messagesProcessingDuration.With(labels).Observe(time.Since(start).Seconds())
-```
-
-{{endhint}}
-
-{{hint 2}}
-
-To find out that message processing failed, it's enough to check if the error from the next handler is not nil.
-
-
-```go
-router.AddMiddleware(func(h message.HandlerFunc) message.HandlerFunc {
-    return func(msg *message.Message) (events []*message.Message, err error) {
-        // ...
-		
-        msgs, err := h(msg)
-        if err != nil {
-            messagesProcessingFailedCounter.With(labels).Inc()
-        }
-
-        // ...
-
-        return msgs, err
-    }
-})
-```
-
-{{endhint}}
-
-{{endhints}}
+We'll run the same tests as in the previous exercise, but you can also run your service locally and check the traces in Jaeger.
