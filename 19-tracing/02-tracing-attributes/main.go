@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 var database = map[string]string{
@@ -18,12 +20,17 @@ var database = map[string]string{
 var ErrUserNotFound = fmt.Errorf("user not found")
 
 func FindUser(ctx context.Context, userID string) (string, error) {
+	ctx, span := otel.Tracer("").Start(ctx, "FindUser")
+	span.SetAttributes(attribute.String("userID", userID))
+	defer span.End()
+
 	// Simulate a slow database read
 	time.Sleep(time.Millisecond * 100)
-	ctx, span := otel.Tracer("").Start(ctx, "FindUser")
-	defer span.End()
+
 	data, exists := database[userID]
 	if !exists {
+		span.RecordError(ErrUserNotFound)
+		span.SetStatus(codes.Error, "user not found")
 		return "", ErrUserNotFound
 	}
 
@@ -32,10 +39,13 @@ func FindUser(ctx context.Context, userID string) (string, error) {
 
 func AddUser(ctx context.Context, userID, name string) error {
 	ctx, span := otel.Tracer("").Start(ctx, "AddUser")
+	span.SetAttributes(attribute.String("userID", userID))
 	defer span.End()
 
 	_, err := FindUser(ctx, userID)
 	if err != nil && !errors.Is(err, ErrUserNotFound) {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "user not found")
 		return fmt.Errorf("failed to find user: %w", err)
 	}
 
