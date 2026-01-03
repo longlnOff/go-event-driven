@@ -1,4 +1,4 @@
-exercise_id = "d79927de-7ddd-4e9d-90d7-ba9f6e6fce1b"
-directory = "project"
-is_text_only = false
+exercise_id = "c1a2f53e-0a6a-49b7-b012-27de9f3fb869"
+directory = "21-sagas-and-process-managers/01-sagas-and-process-managers"
+is_text_only = true
 is_optional = true
