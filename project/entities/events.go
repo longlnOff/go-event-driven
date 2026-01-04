@@ -123,3 +123,13 @@ type DataLakeEvent struct {
 	EventName    string    `db:"event_name"`
 	EventPayload []byte    `db:"event_payload"`
 }
+
+type VipBundleInitialized_v1 struct {
+	Header MessageHeader `json:"header"`
+
+	VipBundleID VipBundleID `json:"vip_bundle_id"`
+}
+
+func (i VipBundleInitialized_v1) IsInternal() bool {
+	return false
+}

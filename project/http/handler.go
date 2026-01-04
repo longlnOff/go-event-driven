@@ -6,6 +6,7 @@ import (
 	ticketsEntity "tickets/entities"
 
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
+	"github.com/google/uuid"
 )
 
 type Handler struct {
@@ -15,6 +16,7 @@ type Handler struct {
 	showRepository    ShowsRepository
 	bookingRepository BookingRepository
 	opsReadModel      OpsBookingReadModel
+	vipBundleRepo     VipBundleRepository
 }
 
 type TicketsRepository interface {
@@ -32,6 +34,24 @@ type BookingRepository interface {
 type OpsBookingReadModel interface {
 	AllBookingsByDate(date string) ([]ticketsEntity.OpsBooking, error)
 	ReservationReadModel(ctx context.Context, bookingID string) (ticketsEntity.OpsBooking, error)
+}
+
+type VipBundleRepository interface {
+	Add(ctx context.Context, vipBundle ticketsEntity.VipBundle) error
+	Get(ctx context.Context, vipBundleID ticketsEntity.VipBundleID) (ticketsEntity.VipBundle, error)
+	GetByBookingID(ctx context.Context, bookingID uuid.UUID) (ticketsEntity.VipBundle, error)
+
+	UpdateByID(
+		ctx context.Context,
+		vipBundleID ticketsEntity.VipBundleID,
+		updateFn func(vipBundle ticketsEntity.VipBundle) (ticketsEntity.VipBundle, error),
+	) (ticketsEntity.VipBundle, error)
+
+	UpdateByBookingID(
+		ctx context.Context,
+		bookingID uuid.UUID,
+		updateFn func(vipBundle ticketsEntity.VipBundle) (ticketsEntity.VipBundle, error),
+	) (ticketsEntity.VipBundle, error)
 }
 
 type dbExecutor interface {

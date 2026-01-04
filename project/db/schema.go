@@ -82,5 +82,20 @@ func InitializeDatabaseSchema(db *sqlx.DB) error {
 		return fmt.Errorf("could not create table events: %w", err)
 	}
 
+	_, err = db.Exec(
+		`
+		CREATE TABLE IF NOT EXISTS vip_bundles (
+			vip_bundle_id UUID PRIMARY KEY,
+			booking_id UUID NOT NULL UNIQUE,
+			payload JSONB NOT NULL
+		); 
+
+	`,
+	)
+
+	if err != nil {
+		return fmt.Errorf("could not create table vip_bundles: %w", err)
+	}
+
 	return nil
 }
