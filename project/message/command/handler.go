@@ -11,19 +11,34 @@ type ReceiptsService interface {
 	RefundReceipt(ctx context.Context, command ticketsEntity.RefundTicket) error
 }
 
+type BookFlightsService interface {
+	BookFlight(
+		ctx context.Context,
+		request ticketsEntity.BookFlightTicketRequest,
+	) (ticketsEntity.BookFlightTicketResponse, error)
+}
+
 type PaymentsService interface {
 	RefundPayment(ctx context.Context, refundPayment ticketsEntity.PaymentRefund) error
 }
 
+type BookingRepository interface {
+	AddBooking(ctx context.Context, booking ticketsEntity.Booking) error
+}
+
 type Handler struct {
-	receiptsService ReceiptsService
-	paymentsService PaymentsService
-	eventBus        *cqrs.EventBus
+	receiptsService   ReceiptsService
+	paymentsService   PaymentsService
+	bookFlightService BookFlightsService
+	bookingRepository BookingRepository
+	eventBus          *cqrs.EventBus
 }
 
 func NewCommandHandler(
 	receiptsService ReceiptsService,
 	paymentsService PaymentsService,
+	bookFlightService BookFlightsService,
+	bookingRepository BookingRepository,
 	eventBus *cqrs.EventBus,
 ) *Handler {
 	if receiptsService == nil {
@@ -32,12 +47,20 @@ func NewCommandHandler(
 	if paymentsService == nil {
 		panic("missing paymentsService")
 	}
+	if bookFlightService == nil {
+		panic("missing bookFlightService")
+	}
 	if eventBus == nil {
 		panic("missing eventBus")
 	}
+	if bookingRepository == nil {
+		panic("missing bookingRepository")
+	}
 	return &Handler{
-		receiptsService: receiptsService,
-		paymentsService: paymentsService,
-		eventBus:        eventBus,
+		receiptsService:   receiptsService,
+		paymentsService:   paymentsService,
+		bookFlightService: bookFlightService,
+		bookingRepository: bookingRepository,
+		eventBus:          eventBus,
 	}
 }

@@ -24,6 +24,7 @@ func NewRouter(
 	opsReadModel ticketsDB.OpsBookingReadModel,
 	eventHandler *ticketsEvent.Handler,
 	watermillLogger watermill.LoggerAdapter,
+	vipBundleProcessManager *VipBundleProcessManager,
 ) *message.Router {
 	router := message.NewDefaultRouter(watermillLogger)
 	AddMiddleWare(router, watermillLogger)
@@ -121,6 +122,30 @@ func NewRouter(
 			"ops_read_model.OnTicketReceiptIssued",
 			opsReadModel.OnTicketReceiptIssued,
 		),
+		cqrs.NewEventHandler(
+			"vip_bundle_process_manager.OnVipBundleInitialized",
+			vipBundleProcessManager.OnVipBundleInitialized,
+		),
+		cqrs.NewEventHandler(
+			"vip_bundle_process_manager.OnBookingMade",
+			vipBundleProcessManager.OnBookingMade,
+		),
+		cqrs.NewEventHandler(
+			"vip_bundle_process_manager.OnTicketBookingConfirmed",
+			vipBundleProcessManager.OnTicketBookingConfirmed,
+		),
+		cqrs.NewEventHandler(
+			"vip_bundle_process_manager.OnBookingFailed",
+			vipBundleProcessManager.OnBookingFailed,
+		),
+		cqrs.NewEventHandler(
+			"vip_bundle_process_manager.OnFlightBooked",
+			vipBundleProcessManager.OnFlightBooked,
+		),
+		cqrs.NewEventHandler(
+			"vip_bundle_process_manager.OnFlightBookingFailed",
+			vipBundleProcessManager.OnFlightBookingFailed,
+		),
 	)
 	if err != nil {
 		panic(err)
@@ -130,6 +155,14 @@ func NewRouter(
 		cqrs.NewCommandHandler(
 			"RefundReceipt",
 			commandHandler.RefundReceipts,
+		),
+		cqrs.NewCommandHandler(
+			"BookShowTickets",
+			commandHandler.BookShowTickets,
+		),
+		cqrs.NewCommandHandler(
+			"BookFlight",
+			commandHandler.BookFlight,
 		),
 	)
 	if err != nil {

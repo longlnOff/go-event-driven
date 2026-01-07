@@ -34,7 +34,7 @@ func (h Handler) PostVipBundle(c echo.Context) error {
 	}
 
 	vb := ticketsEntity.VipBundle{
-		VipBundleID:     ticketsEntity.VipBundleID{uuid.New()},
+		VipBundleID:     ticketsEntity.VipBundleID{UUID: uuid.New()},
 		BookingID:       uuid.New(),
 		CustomerEmail:   request.CustomerEmail,
 		NumberOfTickets: request.NumberOfTickets,

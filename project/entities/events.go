@@ -133,3 +133,75 @@ type VipBundleInitialized_v1 struct {
 func (i VipBundleInitialized_v1) IsInternal() bool {
 	return false
 }
+
+type BookShowTickets struct {
+	BookingID uuid.UUID `json:"booking_id"`
+
+	CustomerEmail   string    `json:"customer_email"`
+	NumberOfTickets int       `json:"number_of_tickets"`
+	ShowId          uuid.UUID `json:"show_id"`
+}
+
+func (i BookShowTickets) IsInternal() bool {
+	return false
+}
+
+type BookFlight struct {
+	CustomerEmail  string    `json:"customer_email"`
+	FlightID       uuid.UUID `json:"to_flight_id"`
+	Passengers     []string  `json:"passengers"`
+	ReferenceID    string    `json:"reference_id"`
+	IdempotencyKey string    `json:"idempotency_key"`
+}
+
+func (i BookFlight) IsInternal() bool {
+	return false
+}
+
+type FlightBooked_v1 struct {
+	Header MessageHeader `json:"header"`
+
+	FlightID  uuid.UUID   `json:"flight_id"`
+	TicketIDs []uuid.UUID `json:"flight_tickets_ids"`
+
+	ReferenceID string `json:"reference_id"`
+}
+
+func (i FlightBooked_v1) IsInternal() bool {
+	return false
+}
+
+type VipBundleFinalized_v1 struct {
+	Header MessageHeader `json:"header"`
+
+	VipBundleID VipBundleID `json:"vip_bundle_id"`
+	Success     bool        `json:"success"`
+}
+
+func (i VipBundleFinalized_v1) IsInternal() bool {
+	return false
+}
+
+type BookingFailed_v1 struct {
+	Header MessageHeader `json:"header"`
+
+	BookingID     uuid.UUID `json:"booking_id"`
+	FailureReason string    `json:"failure_reason"`
+}
+
+func (i BookingFailed_v1) IsInternal() bool {
+	return false
+}
+
+type FlightBookingFailed_v1 struct {
+	Header MessageHeader `json:"header"`
+
+	FlightID      uuid.UUID `json:"flight_id"`
+	FailureReason string    `json:"failure_reason"`
+
+	ReferenceID string `json:"reference_id"`
+}
+
+func (i FlightBookingFailed_v1) IsInternal() bool {
+	return false
+}

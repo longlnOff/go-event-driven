@@ -102,6 +102,9 @@ func migrateEvent(ctx context.Context, event ticketsEntity.DataLakeEvent, rm tic
 				TicketID: ticketRefundedEvent.TicketID,
 			},
 		)
+	case "VipBundleInitialized_v1", "VipBundleFinalized_v1", "FlightBooked_v1", "FlightBookingFailed_v1":
+		// VIP bundle events are not relevant to the ops read model, skip them
+		return nil
 	default:
 		return fmt.Errorf("unknown event %s", event.EventName)
 	}

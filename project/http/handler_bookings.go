@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	ticketsDB "tickets/db"
 	ticketsEntity "tickets/entities"
 
 	"github.com/ThreeDotsLabs/watermill"
@@ -36,7 +37,7 @@ func (h Handler) CreateBooking(c echo.Context) error {
 	}
 	err = h.bookingRepository.AddBooking(c.Request().Context(), booking)
 	if err != nil {
-		if errors.As(err, &echo.ErrBadRequest) {
+		if errors.As(err, &ticketsDB.ErrNoPlacesLeft) {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

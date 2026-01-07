@@ -53,6 +53,7 @@ func New(
 	fileService ticketsEvent.FilesService,
 	paymentService ticketsCommand.PaymentsService,
 	deadNationService ticketsEvent.DeadNationService,
+	bookFlightService ticketsCommand.BookFlightsService,
 	rdb redis.UniversalClient,
 ) Service {
 	traceProvider := ConfigureTraceProvider()
@@ -84,6 +85,7 @@ func New(
 	showRepo := ticketsDB.NewShowsRepository(dbConn)
 	bookingRepo := ticketsDB.NewBookingRepository(dbConn)
 	eventRepo := ticketsDB.NewEventsRepository(dbConn)
+	vipBundleRepo := ticketsDB.NewVipBundleRepository(dbConn)
 
 	commandBus := ticketsCommand.NewCommandBus(publisher, watermillLogger)
 	commandProcessorConfig := ticketsCommand.NewCommandProcessorConfig(
@@ -93,6 +95,8 @@ func New(
 	commandHandler := ticketsCommand.NewCommandHandler(
 		receiptsService,
 		paymentService,
+		bookFlightService,
+		bookingRepo,
 		eventBus,
 	)
 
@@ -113,6 +117,13 @@ func New(
 		watermillLogger,
 	)
 	opsReadModel := ticketsDB.NewOpsBookingReadModel(dbConn, eventBus)
+
+	vipBundleProcessmanager := ticketsMessage.NewVipBundleProcessManager(
+		commandBus,
+		eventBus,
+		vipBundleRepo,
+	)
+
 	router := ticketsMessage.NewRouter(
 		redisSubscriberStore,
 		redisSubscriber,
@@ -124,6 +135,7 @@ func New(
 		opsReadModel,
 		eventHandler,
 		watermillLogger,
+		vipBundleProcessmanager,
 	)
 
 	echoRouter := ticketsHttp.NewHttpRouter(
@@ -133,6 +145,7 @@ func New(
 		showRepo,
 		bookingRepo,
 		opsReadModel,
+		vipBundleRepo,
 	)
 	return Service{
 		db:            dbConn,

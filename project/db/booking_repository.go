@@ -3,8 +3,8 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"net/http"
 	ticketsEntity "tickets/entities"
 	ticketsEvent "tickets/message/event"
 	ticketsOutbox "tickets/message/outbox"
@@ -12,7 +12,11 @@ import (
 	"github.com/ThreeDotsLabs/go-event-driven/v2/common/log"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/jmoiron/sqlx"
-	"github.com/labstack/echo/v4"
+)
+
+var (
+	ErrBookingAlreadyExists = errors.New("booking already exists")
+	ErrNoPlacesLeft         = errors.New("no places left")
 )
 
 type BookingRepository struct {
@@ -68,7 +72,7 @@ func (t BookingRepository) AddBooking(ctx context.Context, booking ticketsEntity
 				// this is usually a bad idea, learn more here:
 				// https://threedots.tech/post/introducing-clean-architecture/
 				// we'll improve it later
-				return echo.NewHTTPError(http.StatusBadRequest, "not enough seats available")
+				return ErrNoPlacesLeft
 			}
 
 			_, err = tx.NamedExecContext(
