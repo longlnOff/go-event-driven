@@ -146,6 +146,14 @@ func NewRouter(
 			"vip_bundle_process_manager.OnFlightBookingFailed",
 			vipBundleProcessManager.OnFlightBookingFailed,
 		),
+		cqrs.NewEventHandler(
+			"vip_bundle_process_manager.OnTaxiBooked",
+			vipBundleProcessManager.OnTaxiBooked,
+		),
+		cqrs.NewEventHandler(
+			"vip_bundle_process_manager.OnTaxiBookingFailed",
+			vipBundleProcessManager.OnTaxiBookingFailed,
+		),
 	)
 	if err != nil {
 		panic(err)
@@ -163,6 +171,14 @@ func NewRouter(
 		cqrs.NewCommandHandler(
 			"BookFlight",
 			commandHandler.BookFlight,
+		),
+		cqrs.NewCommandHandler(
+			"BookTaxi",
+			commandHandler.BookTaxi,
+		),
+		cqrs.NewCommandHandler(
+			"CancelFlight",
+			commandHandler.CancelFlight,
 		),
 	)
 	if err != nil {

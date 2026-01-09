@@ -12,6 +12,7 @@ import (
 type vipBundleRequest struct {
 	CustomerEmail   string    `json:"customer_email"`
 	InboundFlightID uuid.UUID `json:"inbound_flight_id"`
+	ReturnFlightID  uuid.UUID `json:"return_flight_id"`
 	NumberOfTickets int       `json:"number_of_tickets"`
 	Passengers      []string  `json:"passengers"`
 	ShowID          uuid.UUID `json:"show_id"`
@@ -41,6 +42,7 @@ func (h Handler) PostVipBundle(c echo.Context) error {
 		ShowID:          request.ShowID,
 		Passengers:      request.Passengers,
 		InboundFlightID: request.InboundFlightID,
+		ReturnFlightID:  request.ReturnFlightID,
 		IsFinalized:     false,
 		Failed:          false,
 	}

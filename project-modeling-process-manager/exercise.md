@@ -1,61 +1,30 @@
-# Handling flight booking failure
+# Modeling Saga
 
-If booking inbound flight fails, we should cancel all show tickets.
+In real life, process managers are rarely as simple as in the previous module.
+In this module we'll build a process with complexity closer to real processes.
 
-## Exercise
+**Conceptually there is nothing new from the previous module. We are still storing data from events and emitting commands based on that data. That's why we made this module optional.**
 
-Exercise path: ./project-modeling-process-manager
+Stay with us if you want to practice building more complex process managers.
+If not, you can skip this module by hitting `s` in `tdl tr run` or running `tdl tr skip`.
+No worries, you can always go back to this module later.
 
-1. Add a new event handler for `TicketBookingConfirmed_v1`. Store all booked ticket IDs from this event in the `VipBundle` (process manager state).
-   You'll need these to know which tickets to refund.
+{{background}}
 
-`TicketBookingConfirmed_v1` has this structure:
+Our MVP VIP Bundle pilot was a great success.
+After verifying the idea, we can now implement the full version of the VIP Bundle.
 
-```go
-type TicketBookingConfirmed_v1 struct {
-	Header MessageHeader `json:"header"`
+We want to add support for return flights and taxi bookings.
 
-	TicketID      string `json:"ticket_id"`
-	CustomerEmail string `json:"customer_email"`
-	Price         Money  `json:"price"`
+We want to deliver the entire VIP bundle experience. If we cannot book any taxi or flight, we should rollback the entire bundle.
 
-	BookingID string `json:"booking_id"`
-}
-```
+If this becomes a problem, we may consider adding fallback taxi providers. But let's not overcomplicate it for now.
 
-Think of the process manager state as a form of {{exerciseLink "read model" "13-read-models" "01-read-models"}}.
-It's eventually consistent. This matters for events that arrive with delays.
+{{endbackground}}
 
-2. If you receive `BookingFailed_v1` or `OnFlightBookingFailed`, cancel show tickets.
-Send the `RefundTicket` command for each ticket received in `TicketBookingConfirmed_v1` and saved in the `VipBundle`.
+Like previously, we'll start with modeling the process manager. We'll move the model to the project later.
 
-To emit `RefundTicket`, you need to ensure all `TicketBookingConfirmed_v1` events were processed. You know how many tickets to expect based on `VipBundle.NumberOfTickets`.
-If you didn't receive all of them, return an error instead of emitting `RefundTicket` command.
-
-`RefundTickets` command has this structure:
-
-```go
-type RefundTicket struct {
-	Header MessageHeader `json:"header"`
-
-	TicketID string `json:"ticket_id"`
-}
-```
-
-`FlightBookingFailed_v1` has the following structure:
-
-```go
-type FlightBookingFailed_v1 struct {
-	Header MessageHeader `json:"header"`
-
-	FlightID      uuid.UUID `json:"flight_id"`
-	FailureReason string    `json:"failure_reason"`
-
-	ReferenceID string `json:"reference_id"`
-}
-```
-
-**We still work on the `VipBundleProcessManager`. Our goal is to emit the command without implementing its handler yet.**
+The entire process manager will look like this at the end:
 
 ```mermaid
 stateDiagram-v2
@@ -66,23 +35,86 @@ stateDiagram-v2
     BookingMade --> BookInboundFlight : OnBookingMade
     BookInboundFlight --> FlightBooked : Success
     BookInboundFlight --> FlightBookingFailed : Failure
-    FlightBooked --> VipBundleFinalized : OnFlightBooked
+    FlightBooked --> BookReturnFlight : InboundBooked & ReturnNotBooked
+    FlightBooked --> BookTaxi : Both Flights Booked
+    BookReturnFlight --> FlightBooked : Success
+    BookReturnFlight --> FlightBookingFailed : Failure
     FlightBookingFailed --> Rollback : OnFlightBookingFailed
-    BookingFailed --> VipBundleFinalized : OnBookingFailed
+    BookTaxi --> TaxiBooked : Success
+    BookTaxi --> TaxiBookingFailed : Failure
+    TaxiBooked --> VipBundleFinalized : OnTaxiBooked
+    TaxiBookingFailed --> Rollback : OnTaxiBookingFailed
     Rollback --> RefundTicket : Show Booking Exists
-    Rollback --> VipBundleFinalized
-    RefundTicket --> VipBundleFinalized
-    VipBundleFinalized --> [*]
+    Rollback --> CancelInboundFlight : Inbound Flight Exists
+    Rollback --> CancelReturnFlight : Return Flight Exists
+    Rollback --> FailedState
+    VipBundleFinalized --> FinalizedState
+    FailedState --> [*] : Failed Process
+    FinalizedState --> [*] : Completed Process
 ```
 
-{{hints}}
+## Exercise
 
-{{hint 1}}
+Exercise path: ./project-modeling-process-manager
 
-Make sure you don't try to refund tickets that have not been booked yet.
+**Implement the missing `VipBundleProcessManager` methods to make all tests pass.**
 
-You can check if the `BookingMadeAt` is set.
+You need to support these new messages:
 
-{{endhint}}
+```go
+type BookTaxi struct {
+	CustomerEmail      string `json:"customer_email"`
+	CustomerName       string `json:"customer_name"`
+	NumberOfPassengers int    `json:"number_of_passengers"`
+	ReferenceID        string `json:"reference_id"`
+	IdempotencyKey     string `json:"idempotency_key"`
+}
 
-{{endhints}}
+type CancelFlightTickets struct {
+	FlightTicketIDs []uuid.UUID `json:"flight_ticket_id"`
+}
+
+type TaxiBooked_v1 struct {
+	Header MessageHeader `json:"header"`
+
+	TaxiBookingID uuid.UUID `json:"taxi_booking_id"`
+
+	ReferenceID string `json:"reference_id"`
+}
+
+type TaxiBookingFailed_v1 struct {
+	Header MessageHeader `json:"header"`
+
+	FailureReason string `json:"failure_reason"`
+
+	ReferenceID string `json:"reference_id"`
+}
+
+```
+You need to add support for:
+
+1. Booking return flight tickets after successfully booking inbound flight tickets. This happens after `OnFlightBooked` for inbound flight arrives.
+
+When `VipBundle` is created, we will also receive the `ReturnFlightID` -- ID of the return flight.
+
+{{tip}}
+
+You need to distinguish between two flight types: inbound and return when handling `FlightBooked_v1` event.
+Based on that, decide whether to book return flight or taxi.
+
+{{endtip}}
+
+2. Booking taxi
+3. Canceling inbound and return flight tickets (`CancelFlightTickets` command) and show tickets when taxi booking fails
+
+Store all information needed to cancel actions in the `VipBundle` entity.
+Think of this as a form of {{exerciseLink "read model" "13-read-models" "01-read-models"}}.
+
+Store `FlightID` from `FlightBooked_v1` in your process manager.
+
+Taxi booking is the last operation. It will never be canceled as nothing later can break the flow.
+
+4. Move emitting `VipBundleFinalized_v1` and setting `IsFinalized` to the last process manager step.
+
+This is the last module. We will provide very little guidance.
+You should already know how to do all steps.

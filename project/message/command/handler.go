@@ -16,6 +16,16 @@ type BookFlightsService interface {
 		ctx context.Context,
 		request ticketsEntity.BookFlightTicketRequest,
 	) (ticketsEntity.BookFlightTicketResponse, error)
+
+	BookTaxi(
+		ctx context.Context,
+		request ticketsEntity.BookTaxiRequest,
+	) (ticketsEntity.BookTaxiResponse, error)
+
+	CancelFlightTickets(
+		ctx context.Context,
+		request ticketsEntity.CancelFlightTicketsRequest,
+	) error
 }
 
 type PaymentsService interface {

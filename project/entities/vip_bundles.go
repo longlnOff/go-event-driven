@@ -43,4 +43,13 @@ type VipBundle struct {
 	InboundFlightID uuid.UUID `json:"inbound_flight_id"`
 	IsFinalized     bool      `json:"is_finalized"`
 	Failed          bool      `json:"failed"`
+
+	InboundFlightTicketsIDs []uuid.UUID `json:"inbound_flight_tickets_ids"`
+	ReturnFlightID          uuid.UUID   `json:"return_flight_id"`
+
+	ReturnFlightBookedAt   *time.Time  `json:"return_flight_booked_at"`
+	ReturnFlightTicketsIDs []uuid.UUID `json:"return_flight_tickets_ids"`
+
+	TaxiBookedAt  *time.Time `json:"taxi_booked_at"`
+	TaxiBookingID *uuid.UUID `json:"taxi_booking_id"`
 }

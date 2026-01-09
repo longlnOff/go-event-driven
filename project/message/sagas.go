@@ -118,20 +118,47 @@ func (v VipBundleProcessManager) OnFlightBooked(ctx context.Context, event *tick
 		ctx,
 		MustParseBundleID(event.ReferenceID),
 		func(vipBundle ticketsEntity.VipBundle) (ticketsEntity.VipBundle, error) {
-			vipBundle.IsFinalized = true
+			// Check if this is inbound or return flight
+			if event.FlightID == vipBundle.InboundFlightID {
+				// Store inbound flight ticket IDs
+				vipBundle.InboundFlightTicketsIDs = event.TicketIDs
+			} else if event.FlightID == vipBundle.ReturnFlightID {
+				// Store return flight ticket IDs and timestamp
+				vipBundle.ReturnFlightTicketsIDs = event.TicketIDs
+				vipBundle.ReturnFlightBookedAt = &event.Header.PublishedAt
+			}
 			return vipBundle, nil
 		},
 	)
 	if err != nil {
 		return err
 	}
-	return v.eventBus.Publish(
-		ctx, ticketsEntity.VipBundleFinalized_v1{
-			Header:      ticketsEntity.NewMessageHeader(),
-			VipBundleID: vb.VipBundleID,
-			Success:     true,
-		},
-	)
+	// Determine next action based on which flight was booked
+	if event.FlightID == vb.InboundFlightID {
+		// Inbound flight booked - book return flight
+		return v.commandBus.Send(
+			ctx, ticketsEntity.BookFlight{
+				CustomerEmail:  vb.CustomerEmail,
+				FlightID:       vb.ReturnFlightID,
+				Passengers:     vb.Passengers,
+				ReferenceID:    vb.VipBundleID.String(),
+				IdempotencyKey: uuid.NewString(),
+			},
+		)
+	} else if event.FlightID == vb.ReturnFlightID {
+		// Return flight booked - book taxi
+		return v.commandBus.Send(
+			ctx, ticketsEntity.BookTaxi{
+				CustomerEmail:      vb.CustomerEmail,
+				CustomerName:       vb.Passengers[0],
+				NumberOfPassengers: vb.NumberOfTickets,
+				ReferenceID:        vb.VipBundleID.String(),
+				IdempotencyKey:     uuid.NewString(),
+			},
+		)
+	}
+
+	return nil
 }
 
 func (v VipBundleProcessManager) OnBookingFailed(ctx context.Context, event *ticketsEntity.BookingFailed_v1) error {
@@ -195,7 +222,7 @@ func (v VipBundleProcessManager) OnFlightBookingFailed(
 	if err != nil {
 		return err
 	}
-	vb, err := v.vipBundleRepository.Get(ctx, ticketsEntity.VipBundleID{vipBundleID})
+	vb, err := v.vipBundleRepository.Get(ctx, ticketsEntity.VipBundleID{UUID: vipBundleID})
 	if err != nil {
 		return err
 	}
@@ -203,11 +230,120 @@ func (v VipBundleProcessManager) OnFlightBookingFailed(
 	if len(ticketIDs) < vb.NumberOfTickets {
 		return errors.New("confirmed tickets haven't processed yet")
 	}
+
+	// refund shows
 	for i := range ticketIDs {
 		err := v.commandBus.Send(
 			ctx, ticketsEntity.RefundTicket{
 				Header:   ticketsEntity.NewMessageHeader(),
 				TicketID: ticketIDs[i].String(),
+			},
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Cancel inbound flight tickets if they exist
+	if len(vb.InboundFlightTicketsIDs) > 0 {
+		err := v.commandBus.Send(
+			ctx, ticketsEntity.CancelFlightTickets{
+				FlightTicketIDs: vb.InboundFlightTicketsIDs,
+			},
+		)
+		if err != nil {
+			return err
+		}
+	}
+	vb, err = v.vipBundleRepository.UpdateByBookingID(
+		ctx,
+		vb.BookingID,
+		func(vipBundle ticketsEntity.VipBundle) (ticketsEntity.VipBundle, error) {
+			vipBundle.IsFinalized = true
+			vipBundle.Failed = true
+			return vipBundle, nil
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	return v.eventBus.Publish(
+		ctx, ticketsEntity.VipBundleFinalized_v1{
+			Header:      ticketsEntity.NewMessageHeader(),
+			VipBundleID: vb.VipBundleID,
+			Success:     false,
+		},
+	)
+}
+
+func (v VipBundleProcessManager) OnTaxiBooked(ctx context.Context, event *ticketsEntity.TaxiBooked_v1) error {
+	vb, err := v.vipBundleRepository.UpdateByID(
+		ctx,
+		MustParseBundleID(event.ReferenceID),
+		func(vipBundle ticketsEntity.VipBundle) (ticketsEntity.VipBundle, error) {
+			vipBundle.TaxiBookedAt = &event.Header.PublishedAt
+			vipBundle.TaxiBookingID = &event.TaxiBookingID
+			vipBundle.IsFinalized = true
+			return vipBundle, nil
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	return v.eventBus.Publish(
+		ctx, ticketsEntity.VipBundleFinalized_v1{
+			Header:      ticketsEntity.NewMessageHeader(),
+			VipBundleID: vb.VipBundleID,
+			Success:     true,
+		},
+	)
+}
+
+func (v VipBundleProcessManager) OnTaxiBookingFailed(
+	ctx context.Context,
+	event *ticketsEntity.TaxiBookingFailed_v1,
+) error {
+	vipBundleID, err := uuid.Parse(event.ReferenceID)
+	if err != nil {
+		return err
+	}
+	vb, err := v.vipBundleRepository.Get(ctx, ticketsEntity.VipBundleID{vipBundleID})
+	if err != nil {
+		return err
+	}
+
+	// Refund show tickets
+	for i := range vb.TicketIDs {
+		err := v.commandBus.Send(
+			ctx, ticketsEntity.RefundTicket{
+				Header:   ticketsEntity.NewMessageHeader(),
+				TicketID: vb.TicketIDs[i].String(),
+			},
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Cancel inbound flight tickets
+	if len(vb.InboundFlightTicketsIDs) > 0 {
+		err := v.commandBus.Send(
+			ctx, ticketsEntity.CancelFlightTickets{
+				FlightTicketIDs: vb.InboundFlightTicketsIDs,
+			},
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Cancel return flight tickets
+	if len(vb.ReturnFlightTicketsIDs) > 0 {
+		err := v.commandBus.Send(
+			ctx, ticketsEntity.CancelFlightTickets{
+				FlightTicketIDs: vb.ReturnFlightTicketsIDs,
 			},
 		)
 		if err != nil {

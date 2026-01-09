@@ -205,3 +205,27 @@ type FlightBookingFailed_v1 struct {
 func (i FlightBookingFailed_v1) IsInternal() bool {
 	return false
 }
+
+type TaxiBooked_v1 struct {
+	Header MessageHeader `json:"header"`
+
+	TaxiBookingID uuid.UUID `json:"taxi_booking_id"`
+
+	ReferenceID string `json:"reference_id"`
+}
+
+func (i TaxiBooked_v1) IsInternal() bool {
+	return false
+}
+
+type TaxiBookingFailed_v1 struct {
+	Header MessageHeader `json:"header"`
+
+	FailureReason string `json:"failure_reason"`
+
+	ReferenceID string `json:"reference_id"`
+}
+
+func (i TaxiBookingFailed_v1) IsInternal() bool {
+	return false
+}

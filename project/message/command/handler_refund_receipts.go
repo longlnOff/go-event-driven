@@ -17,6 +17,9 @@ func (h Handler) RefundReceipts(
 		ctx,
 		*command,
 	)
+	if err != nil {
+		return err
+	}
 
 	err = h.paymentsService.RefundPayment(
 		ctx,
